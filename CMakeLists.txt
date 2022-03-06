@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.15)
 
 #  It is used as your project's main executable name. 
 set(PROJECT_NAME model)
-set(PROJECT_SOURCES main.cpp)
-set(PROJECT_HEADERS) 
+set(PROJECT_SOURCES main.cpp particle.cpp)
+set(PROJECT_HEADERS particle.h)
 
 project(${PROJECT_NAME} C CXX) # project(${PROJECT_NAME} C CXX ASM)
 
