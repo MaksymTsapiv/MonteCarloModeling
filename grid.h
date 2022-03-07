@@ -18,4 +18,8 @@ public:
     void move();
 };
 
+double random_double(double from, double to);
+
+double calc_dist(Particle p1, Particle p2);
+
 #endif //MODEL_GRID_H
