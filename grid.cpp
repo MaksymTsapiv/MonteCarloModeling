@@ -1,3 +1,6 @@
+#include <fstream>
+#include <stdexcept>
+#include <string>
 #include "grid.h"
 
 double Grid::get_Lx() {
@@ -26,4 +29,107 @@ void Grid::fill(size_t n) {
 
 void Grid::move() {
 
+}
+
+enum paramsMLen{
+    TYPE_MLEN = 6, SN_MLEN = 5, NAME_MLEN = 4, ALT_LOC_IND_MLEN = 1, RES_NAME_MLEN = 3,
+    CHAIN_IND_MLEN = 1, RES_SEQ_NUM_MLEN = 4, RES_INS_CODE_MLEN = 1,
+    X_MLEN = 8, Y_MLEN = 8, Z_MLEN = 8, OCC_MLEN = 6, TEMP_FACTOR_MLEN = 6,
+    SEG_ID_MLEN = 4, ELEM_SYMB_MLEN = 2, CHARGE_MLEN = 2
+};
+
+//typedef unsigned short param_len;
+
+//constexpr param_len TYPE_MLEN;
+//constexpr param_len SN_MLEN = 5;
+//constexpr param_len NAME_MLEN = 4;
+//constexpr param_len ALT_LOC_IND_MLEN = 1;
+//constexpr param_len RES_NAME_MLEN = 3;
+//constexpr param_len CHAIN_IND_MLEN = 1;
+//constexpr param_len RES_SEQ_NUM_MLEN = 4;
+//constexpr param_len RES_INS_CODE_MLEN = 1;
+//constexpr param_len X_MLEN = 8;
+//constexpr param_len Y_MLEN = 8;
+//constexpr param_len Z_MLEN = 8;
+//constexpr param_len OCC_MLEN = 6;
+//constexpr param_len TEMP_FACTOR_MLEN = 6;
+//constexpr param_len SEG_ID_MLEN = 4;
+//constexpr param_len ELEM_SYMB_MLEN = 2;
+//constexpr param_len CHARGE_MLEN = 2;
+
+
+enum direction{left, right};
+
+static std::string
+check_fill(std::string val, size_t len, direction align) {
+    auto val_len = val.size();
+    if (val_len == 0)
+        for (auto i = len; i > 0; i--, val += " ");
+    else if (val_len > len)
+        throw std::invalid_argument("Invalid argument length (too long): expected " +
+                                    std::to_string(len) + ", got " + std::to_string(val_len));
+    else {
+        std::string xfix = "";
+        for (auto i = val.size(); i < len; i++, xfix += " ");
+        val = (align == right) ? xfix + val : val + xfix;
+    }
+    return val;
+}
+
+static std::string
+check_fill(std::string val, int len) {
+    return check_fill(val, len, left);
+}
+
+static void
+export_to_pdb ( std::string fn,             // output filename with extension
+                std::string type,           // 1-6
+                std::string sn,             // 7-11  right
+                std::string name,           // 13-16
+                std::string alt_loc_ind,    // 17
+                std::string res_name,       // 18-20 right
+                std::string chain_ind,      // 22
+                std::string res_seq_num,    // 23-26 right
+                std::string res_ins_code,   // 27
+                std::string x,              // 31-38 right
+                std::string y,              // 39-46 right
+                std::string z,              // 47-54 right
+                std::string occ,            // 55-60 right
+                std::string temp_factor,    // 61-66 right
+                std::string seg_id,         // 73-76
+                std::string elem_symb,      // 77-78 right
+                std::string charge          // 79-80
+              ){
+    type = check_fill(type, TYPE_MLEN);
+    sn = check_fill(sn, SN_MLEN, right);
+    name = check_fill(name, NAME_MLEN);
+    alt_loc_ind = check_fill(alt_loc_ind, ALT_LOC_IND_MLEN);
+    res_name = check_fill(res_name, RES_NAME_MLEN, right);
+    chain_ind = check_fill(chain_ind, CHAIN_IND_MLEN);
+    res_seq_num = check_fill(res_seq_num, RES_SEQ_NUM_MLEN, right);
+    res_ins_code = check_fill(res_ins_code, RES_INS_CODE_MLEN);
+    x = check_fill(x, X_MLEN, right);
+    y = check_fill(y, Y_MLEN, right);
+    z = check_fill(z, Z_MLEN, right);
+    occ = check_fill(occ, OCC_MLEN, right);
+    temp_factor = check_fill(temp_factor, TEMP_FACTOR_MLEN, right);
+    seg_id = check_fill(seg_id, SEG_ID_MLEN);
+    elem_symb = check_fill(elem_symb, ELEM_SYMB_MLEN, right);
+    charge = check_fill(charge, CHARGE_MLEN);
+
+    std::ofstream pdb_file(fn, std::ofstream::ate);
+    pdb_file << type << sn << " " << name << alt_loc_ind << res_name << " " << chain_ind
+             << res_seq_num << res_ins_code << "   " << x << y << z << occ << temp_factor
+             << "     " << elem_symb << charge << std::endl;
+    pdb_file.close();
+}
+
+void Grid::export_to_pdb(std::string fn) {
+    unsigned serial_num = 1;
+    for (auto particle : particles) {
+        std::string sn_str = std::to_string(serial_num);
+        ::export_to_pdb("atoms.pdb", "ATOM", std::to_string(serial_num), "", "", "", "", "", "",
+                std::to_string(particle.get_x()), std::to_string(particle.get_y()), std::to_string(particle.get_z()), "", "", "", "", "");
+        serial_num++;
+    }
 }

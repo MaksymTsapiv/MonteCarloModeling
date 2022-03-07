@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <vector>
+#include <string>
 #include "particle.h"
 
 
@@ -25,6 +26,7 @@ public:
 
     void fill(size_t n);
     void move();
+    void export_to_pdb(std::string fn);
 };
 
 #endif //MODEL_GRID_H
