@@ -1,7 +1,6 @@
 #ifndef MODEL_GRID_H
 #define MODEL_GRID_H
 
-#include <cstdio>
 #include <vector>
 #include "particle.h"
 
@@ -13,6 +12,8 @@ private:
 
 
 public:
+    Grid(double x, double y, double z) : Lx(x), Ly(y), Lz(z) {};
+
     void fill(size_t n);
     void move();
 };
