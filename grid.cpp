@@ -54,7 +54,7 @@ void Grid::fill(size_t n) {
         particle = Particle(x, y, z, sigma);
 
         for (Particle p : particles) {
-            if (calc_dist(p, particle) < sigma) {  //TODO: >= or > ???
+            if (calc_dist(p, particle) < sigma) {  //TODO: < or <= ???
                 flag = false;
                 break;
             }
