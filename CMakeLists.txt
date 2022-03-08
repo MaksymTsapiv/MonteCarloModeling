@@ -1,12 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 
-
-#  It is used as your project's main executable name. 
+# It is used as your project's main executable name. 
 set(PROJECT_NAME model)
 set(PROJECT_SOURCES main.cpp particle.cpp grid.cpp)
 set(PROJECT_HEADERS particle.h grid.h time_measurement.h)
 
-project(${PROJECT_NAME} C CXX) # project(${PROJECT_NAME} C CXX ASM)
+project(${PROJECT_NAME} CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -21,26 +20,21 @@ set(WARNINGS_AS_ERRORS OFF)
 
 set(ENABLE_PVS_STUDIO OFF)
 
-#  Definitely enable sanitizers while developing.
-#  Disable it for the production builds and before submitting for grading.
-#  Only one of Memory (MSAN), Address (ASAN), or Thread (TSan)
-#  sanitizers is applicable at the time -- the first defined.
+#  Only one of MSAN, ASAN, or TSan is applicable at the time
 
 #! UndefinedBehaviorSanitizer (UBSan)
 #  Info: https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html
 set(ENABLE_UBSan OFF)
-#! AddressSanitizer -- detects use after free or after scope exit,
-#  memory overflows and leaks.  
+#! AddressSanitizer -- use after free/scope exit, memory overflows, leaks.
 #  Info: https://github.com/google/sanitizers/wiki/AddressSanitizer
 set(ENABLE_ASAN OFF)
 #! ThreadSanitizer -- detects data races.
 set(ENABLE_TSan OFF)
-#! MemorySanitizer detects uninitialized memory reads 
+#! MemorySanitizer --  detects uninitialized memory reads
 #  Info: https://github.com/google/sanitizers/wiki/MemorySanitizer
 set(ENABLE_MSAN OFF)
 
 
-#! Be default -- build release version if not specified otherwise.
 if (NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
 endif ()
@@ -55,16 +49,9 @@ include(cmake/CompilerWarnings.cmake)
 #! Project main executable source compilation
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS})
 
-#! Put path to your project headers
-target_include_directories(${PROJECT_NAME} PRIVATE options_parser)
-
 #! Add external packages
-# options_parser requires boost::program_options library
 find_package(Threads REQUIRED)
-find_package(Boost 1.71.0 COMPONENTS program_options system REQUIRED)
 target_include_directories(${PROJECT_NAME} PRIVATE ${Boost_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} Boost::program_options Boost::system Threads::Threads)
-
 
 set_target_properties( ${PROJECT_NAME}
 		PROPERTIES
