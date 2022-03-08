@@ -1,7 +1,6 @@
 #ifndef MODEL_GRID_H
 #define MODEL_GRID_H
 
-#include <cstdio>
 #include <vector>
 #include <string>
 #include "particle.h"
@@ -28,5 +27,9 @@ public:
     void move();
     void export_to_pdb(std::string fn);
 };
+
+double random_double(double from, double to);
+
+double calc_dist(Particle p1, Particle p2);
 
 #endif //MODEL_GRID_H
