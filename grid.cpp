@@ -1,4 +1,5 @@
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <cstddef>
@@ -119,11 +120,43 @@ enum paramsMLen{
 //constexpr param_len ELEM_SYMB_MLEN = 2;
 //constexpr param_len CHARGE_MLEN = 2;
 
+static std::string
+format(double fp_num, unsigned nint, unsigned nfrac) {
+    auto maxNum = std::pow(10, nint);
+    if (fp_num >= maxNum)
+        throw std::invalid_argument(std::string("Number is too big (max ")
+                                    + std::to_string(maxNum) + std::string(")"));
+
+    fp_num = std::ceil(fp_num * maxNum) / static_cast<double>(maxNum);
+
+    std::stringstream fp_num_ss;
+    fp_num_ss.precision(nfrac);
+    fp_num_ss.setf(std::ios::fixed, std::ios::floatfield);
+    fp_num_ss << fp_num;
+
+    return fp_num_ss.str();
+}
+
+constexpr auto COORD_MINT = 4;
+constexpr auto COORD_MFRAC = 3;
+
+constexpr auto OCC_MINT = 3;
+constexpr auto OCC_MFRAC = 2;
+
+static std::string
+fcoord (double coord) {
+    return format(coord, COORD_MINT, COORD_MFRAC);
+}
+
+static std::string
+focc (double occ) {
+    return format(occ, OCC_MINT, OCC_MFRAC);
+}
 
 enum direction{left, right};
 
 static std::string
-check_fill(std::string val, size_t len, direction align) {
+check_fill (std::string val, size_t len, direction align) {
     auto val_len = val.size();
     if (val_len == 0)
         for (auto i = len; i > 0; i--, val += " ");
@@ -179,7 +212,7 @@ export_to_pdb ( std::string fn,             // output filename with extension
     elem_symb = check_fill(elem_symb, ELEM_SYMB_MLEN, right);
     charge = check_fill(charge, CHARGE_MLEN);
 
-    std::ofstream pdb_file(fn, std::ofstream::ate);
+    std::ofstream pdb_file(fn, std::ofstream::app);
     pdb_file << type << sn << " " << name << alt_loc_ind << res_name << " " << chain_ind
              << res_seq_num << res_ins_code << "   " << x << y << z << occ << temp_factor
              << "     " << elem_symb << charge << std::endl;
@@ -187,11 +220,13 @@ export_to_pdb ( std::string fn,             // output filename with extension
 }
 
 void Grid::export_to_pdb(std::string fn) {
+    remove(fn.data());
     unsigned serial_num = 1;
     for (auto particle : particles) {
         std::string sn_str = std::to_string(serial_num);
-        ::export_to_pdb("atoms.pdb", "ATOM", std::to_string(serial_num), "", "", "", "", "", "",
-                std::to_string(particle.get_x()), std::to_string(particle.get_y()), std::to_string(particle.get_z()), "", "", "", "", "");
+        ::export_to_pdb(fn, "ATOM", std::to_string(serial_num), "", "", "", "", "", "",
+                fcoord(particle.get_x()), fcoord(particle.get_y()), fcoord(particle.get_z()),
+                focc(particle.get_sigma()), "", "", "", "");
         serial_num++;
     }
 }
