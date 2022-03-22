@@ -9,10 +9,10 @@ public:
     Particle() : x_cor(0), y_cor(0), z_cor(0), sigma(0) {};
     Particle(double x, double y, double z, double sigma) : x_cor(x), y_cor(y), z_cor(z), sigma(sigma) {};
 
-    double get_x();
-    double get_y();
-    double get_z();
-    double get_sigma();
+    double get_x() const;
+    double get_y() const;
+    double get_z() const;
+    double get_sigma() const;
 
     void set_x(double x);
     void set_y(double y);

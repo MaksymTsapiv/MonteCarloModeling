@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: http://www.viva64.com
+
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -31,13 +34,13 @@ double calc_dist(Particle p1, Particle p2) {
     return hypot(hypot(x1 - x2, y1 - y2), z1 - z2);
 }
 
-double Grid::get_Lx() {
+double Grid::get_Lx() const{
     return Lx;
 }
-double Grid::get_Ly() {
+double Grid::get_Ly() const{
     return Ly;
 }
-double Grid::get_Lz() {
+double Grid::get_Lz() const{
     return Lz;
 }
 
@@ -195,6 +198,7 @@ export_to_pdb ( std::string fn,             // output filename with extension
                 std::string elem_symb,      // 77-78 right
                 std::string charge          // 79-80
               ){
+
     type = check_fill(type, TYPE_MLEN);
     sn = check_fill(sn, SN_MLEN, right);
     name = check_fill(name, NAME_MLEN);

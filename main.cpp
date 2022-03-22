@@ -3,19 +3,32 @@
 
 #include <iostream>
 #include <chrono>
+#include <fstream>
 #include <atomic>
+#include "parse_config.h"
 #include "time_measurement.h"
 #include "grid.h"
-#include "particle.h"
 
 
 int main(int argc, char* argv[]) {
-    size_t n = std::stoi(argv[1]);
-    double Lx = 10.0, Ly = 10.0, Lz = 10.0;
-    Grid grid(Lx, Ly, Lz);
+    if (argc != 2) {
+        std::cout << "Wrong arguments!" << std::endl;
+        exit(1);
+    }
+
+    std::ifstream data(argv[1]);
+    if (!data) {
+        std::cout << "Error while opening the config file!" << std::endl;
+        exit(3);
+    }
+    auto config = parse_conf(data);
+
+    auto conf = Config::from_map(config);
+
+    Grid grid(conf.Lx, conf.Ly, conf.Lz);
 
     auto start = get_current_time_fenced();
-    grid.fill(n);
+    grid.fill(conf.N);
     auto finish = get_current_time_fenced();
 
 
@@ -23,5 +36,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
 

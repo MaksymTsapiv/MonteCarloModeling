@@ -15,9 +15,9 @@ public:
     Grid() : Lx(0), Ly(0), Lz(0) {};
     Grid(double x, double y, double z) : Lx(x), Ly(y), Lz(z) {};
 
-    double get_Lx();
-    double get_Ly();
-    double get_Lz();
+    double get_Lx() const;
+    double get_Ly() const;
+    double get_Lz() const;
 
     void set_Lx(double x);
     void set_Ly(double y);

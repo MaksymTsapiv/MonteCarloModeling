@@ -3,19 +3,19 @@
 
 #include "particle.h"
 
-double Particle::get_x() {
+double Particle::get_x() const{
     return x_cor;
 }
 
-double Particle::get_y() {
+double Particle::get_y() const{
     return y_cor;
 }
 
-double Particle::get_z() {
+double Particle::get_z() const{
     return z_cor;
 }
 
-double Particle::get_sigma() {
+double Particle::get_sigma() const{
     return sigma;
 }
 
