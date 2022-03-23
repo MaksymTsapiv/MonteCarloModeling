@@ -94,7 +94,30 @@ void Grid::fill(size_t n) {
 }
 
 void Grid::move() {
+    bool flag = true;
+    size_t count = 0;
+    double sigma = 1.0;
 
+    for (auto particle: particles) {
+        double x = particle.get_x() + random_double(0, sigma);
+        double y = particle.get_y() + random_double(0, sigma);
+        double z = particle.get_z() + random_double(0, sigma);
+
+        for (auto p : particles) {
+            if (calc_dist(Particle(x, y, z, sigma), p) < sigma) {
+                flag = false;
+                count++;
+                break;
+            }
+        }
+        if (flag) {
+            particle.set_x(x);
+            particle.set_y(y);
+            particle.set_z(z);
+        }
+        flag = true;
+    }
+    std::cout << count << std::endl;
 }
 
 enum paramsMLen{
