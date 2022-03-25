@@ -88,36 +88,35 @@ void Grid::fill(size_t n) {
 
         count_tries++;
     }
-
-    std::cout << count_tries << "\n" <<particles.size() << std::endl;
-
 }
 
 void Grid::move() {
     bool flag = true;
     size_t count = 0;
-    double sigma = 1.0;
+    double dispmax = 0.2;   // TODO: unhardcode
 
-    for (auto particle: particles) {
-        double x = particle.get_x() + random_double(0, sigma);
-        double y = particle.get_y() + random_double(0, sigma);
-        double z = particle.get_z() + random_double(0, sigma);
+    for (size_t j = 0; j < particles.size(); j++) {
+        double x = particles[j].get_x() + random_double(0, dispmax);
+        double y = particles[j].get_y() + random_double(0, dispmax);
+        double z = particles[j].get_z() + random_double(0, dispmax);
 
-        for (auto p : particles) {
-            if (calc_dist(Particle(x, y, z, sigma), p) < sigma) {
+
+        for (size_t i = 0; i < particles.size(); i++) {
+            if (i == j)
+                continue;
+            if (calc_dist(Particle(x, y, z, dispmax), particles[i]) < dispmax) {
                 flag = false;
                 count++;
                 break;
             }
         }
         if (flag) {
-            particle.set_x(x);
-            particle.set_y(y);
-            particle.set_z(z);
+            particles[j].set_x(x);
+            particles[j].set_y(y);
+            particles[j].set_z(z);
         }
         flag = true;
     }
-    std::cout << count << std::endl;
 }
 
 enum paramsMLen{

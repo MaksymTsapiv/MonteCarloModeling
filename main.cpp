@@ -29,10 +29,14 @@ int main(int argc, char* argv[]) {
 
     auto start1 = get_current_time_fenced();
     grid.fill(conf.N);
+    grid.export_to_pdb("fill.pdb");
+
     auto start2 = get_current_time_fenced();
     grid.move();
-    auto finish = get_current_time_fenced();
+    grid.export_to_pdb("move.pdb");
 
+
+    auto finish = get_current_time_fenced();
 
     std::cout << "fill: " << to_us(start2 - start1)<< "\n" << "move: " << to_us(finish - start2) << std::endl;
 
