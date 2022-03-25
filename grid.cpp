@@ -32,6 +32,7 @@ double calc_dist(Particle p1, Particle p2) {
     double z2 = p2.get_z();
 
     return hypot(hypot(x1 - x2, y1 - y2), z1 - z2);
+//    return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
 }
 
 double Grid::get_Lx() const{
@@ -68,7 +69,7 @@ void Grid::fill(size_t n) {
     Particle particle = Particle(x, y, z, sigma);
     particles.push_back(particle);
 
-    while ((particles.size() != n) && count_tries != max_tries) {
+    while ((particles.size() < n) && count_tries < max_tries) {
 
         x = (Lx - sigma) * random_double(0, 1);
         y = (Ly - sigma) * random_double(0, 1);
@@ -77,7 +78,7 @@ void Grid::fill(size_t n) {
         particle = Particle(x, y, z, sigma);
 
         for (Particle p : particles) {
-            if (calc_dist(p, particle) < sigma) {  //TODO: < or <= ???
+            if (calc_dist(p, particle) <= sigma) {
                 flag = false;
                 break;
             }
@@ -93,6 +94,7 @@ void Grid::fill(size_t n) {
 void Grid::move() {
     bool flag = true;
     size_t count = 0;
+    double sigma = 1.0;
     double dispmax = 0.2;   // TODO: unhardcode
 
     for (size_t j = 0; j < particles.size(); j++) {
@@ -100,11 +102,10 @@ void Grid::move() {
         double y = particles[j].get_y() + random_double(0, dispmax);
         double z = particles[j].get_z() + random_double(0, dispmax);
 
-
         for (size_t i = 0; i < particles.size(); i++) {
             if (i == j)
                 continue;
-            if (calc_dist(Particle(x, y, z, dispmax), particles[i]) < dispmax) {
+            if (calc_dist(Particle(x, y, z, dispmax), particles[i]) < sigma) {
                 flag = false;
                 count++;
                 break;
