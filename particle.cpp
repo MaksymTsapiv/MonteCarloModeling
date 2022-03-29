@@ -3,6 +3,17 @@
 
 #include "particle.h"
 
+unsigned int Particle::nextId = 0;
+
+Particle::Particle() : x_cor(0), y_cor(0), z_cor(0), sigma(0), id(nextId)
+{ nextId++; }
+
+
+Particle::Particle(double x, double y, double z, double sigma) :
+    x_cor(x), y_cor(y), z_cor(z), sigma(sigma), id(nextId)
+{ nextId++; }
+
+
 double Particle::get_x() const{
     return x_cor;
 }
@@ -17,6 +28,10 @@ double Particle::get_z() const{
 
 double Particle::get_sigma() const{
     return sigma;
+}
+
+double Particle::get_id() const{
+    return id;
 }
 
 void Particle::set_x(double x) {

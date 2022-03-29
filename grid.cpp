@@ -34,6 +34,10 @@ double calc_dist(Particle p1, Particle p2) {
     return hypot(hypot(x1 - x2, y1 - y2), z1 - z2);
 }
 
+int Grid::get_cell_id(unsigned int x, unsigned int y, unsigned int z) const {
+    return x*dim_cells + y*dim_cells + z;
+};
+
 double Grid::get_Lx() const{
     return Lx;
 }
@@ -74,7 +78,7 @@ void Grid::fill(size_t n) {
         y = (Ly - sigma) * random_double(0, 1);
         z = (Lz - sigma) * random_double(0, 1);
 
-        particle = Particle(x, y, z, sigma);
+        Particle particle{x, y, z, sigma};
 
         for (Particle p : particles) {
             if (calc_dist(p, particle) < sigma) {  //TODO: < or <= ???
