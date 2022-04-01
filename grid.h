@@ -15,7 +15,7 @@ private:
 
 public:
     Grid() : Lx(0), Ly(0), Lz(0) {}
-    Grid(double x, double y, double z, unsigned int dim_cells_) {
+    Grid(double x, double y, double z, size_t dim_cells_) {
         Lx = x;
         Ly = y;
         Lz = z;
@@ -37,10 +37,10 @@ public:
     void set_Ly(double y);
     void set_Lz(double z);
 
-    int get_cell_id(unsigned int x, unsigned int y, unsigned int z) const;
+    size_t get_cell_id(size_t x, size_t y, size_t z) const;
 
     void fill(size_t n);
-    void move();
+    void move(double dispmax);
     void export_to_pdb(std::string fn);
 };
 

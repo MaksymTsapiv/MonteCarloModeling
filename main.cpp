@@ -11,6 +11,7 @@
 
 
 int main(int argc, char* argv[]) {
+    double dispmax = 0.2;
     if (argc != 2) {
         std::cout << "Wrong arguments!" << std::endl;
         exit(1);
@@ -32,7 +33,7 @@ int main(int argc, char* argv[]) {
     grid.export_to_pdb("fill.pdb");
 
     auto start2 = get_current_time_fenced();
-    grid.move();
+    grid.move(dispmax);
     grid.export_to_pdb("move.pdb");
 
 
