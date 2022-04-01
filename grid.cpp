@@ -14,6 +14,24 @@
 #include "particle.h"
 
 
+void Grid::common_initializer(int x, int y, int z){
+    cells.reserve(dim_cells * dim_cells * dim_cells);
+    Lx = x;
+    Ly = y;
+    Lz = z;
+    compute_adj_cells();
+}
+
+Grid::Grid(double x, double y, double z) {
+    common_initializer(x, y, z);
+}
+
+Grid::Grid(double x, double y, double z, int dim_cells_) {
+    dim_cells = dim_cells_;
+    common_initializer(x, y, z);
+}
+
+
 double random_double(double from, double to) {
     std::random_device rd;
     std::mt19937 rand_double(rd());
@@ -32,11 +50,11 @@ double calc_dist(Particle p1, Particle p2) {
     double z2 = p2.get_z();
 
     return hypot(hypot(x1 - x2, y1 - y2), z1 - z2);
-//    return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
+    // return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
 }
 
 int Grid::get_cell_id(unsigned int x, unsigned int y, unsigned int z) const {
-    return x*dim_cells + y*dim_cells + z;
+    return x*dim_cells*dim_cells + y*dim_cells + z;
 };
 
 double Grid::get_Lx() const{
@@ -144,25 +162,6 @@ enum paramsMLen{
     X_MLEN = 8, Y_MLEN = 8, Z_MLEN = 8, OCC_MLEN = 6, TEMP_FACTOR_MLEN = 6,
     SEG_ID_MLEN = 4, ELEM_SYMB_MLEN = 2, CHARGE_MLEN = 2
 };
-
-//typedef unsigned short param_len;
-
-//constexpr param_len TYPE_MLEN;
-//constexpr param_len SN_MLEN = 5;
-//constexpr param_len NAME_MLEN = 4;
-//constexpr param_len ALT_LOC_IND_MLEN = 1;
-//constexpr param_len RES_NAME_MLEN = 3;
-//constexpr param_len CHAIN_IND_MLEN = 1;
-//constexpr param_len RES_SEQ_NUM_MLEN = 4;
-//constexpr param_len RES_INS_CODE_MLEN = 1;
-//constexpr param_len X_MLEN = 8;
-//constexpr param_len Y_MLEN = 8;
-//constexpr param_len Z_MLEN = 8;
-//constexpr param_len OCC_MLEN = 6;
-//constexpr param_len TEMP_FACTOR_MLEN = 6;
-//constexpr param_len SEG_ID_MLEN = 4;
-//constexpr param_len ELEM_SYMB_MLEN = 2;
-//constexpr param_len CHARGE_MLEN = 2;
 
 static std::string
 format(double fp_num, unsigned nint, unsigned nfrac) {
@@ -274,4 +273,64 @@ void Grid::export_to_pdb(std::string fn) {
                 focc(particle.get_sigma()), "", "", "", "");
         serial_num++;
     }
+}
+
+/*
+ * Find and return map where keys are cells and values are adjacent cells (excluding the key cell)
+ */
+std::map<int, std::vector<int>> Grid::compute_adj_cells() {
+
+    std::map<int, std::vector<int>> adj_cells;
+
+    for (auto i = 0; i < dim_cells; i++)
+    {
+        int li = i == 0 ? dim_cells - 1 : i - 1;
+        int ri = i == dim_cells - 1 ? 0 : i+1;
+        for (auto j = 0; j < dim_cells; j++)
+        {
+            int lj = j == 0 ? dim_cells - 1 : j - 1;
+            int rj = j == dim_cells - 1 ? 0 : j+1;
+            for (auto k = 0; k < dim_cells; k++)
+            {
+                int lk = k == 0 ? dim_cells - 1 : k - 1;
+                int rk = k == dim_cells - 1 ? 0 : k+1;
+
+                adj_cells[get_cell_id(li, j, k)].push_back(get_cell_id(i, j, k));   // left on x axis
+                adj_cells[get_cell_id(i, lj, k)].push_back(get_cell_id(i, j, k));   // left on y axis
+                adj_cells[get_cell_id(i, j, lk)].push_back(get_cell_id(i, j, k));   // left on z axis
+
+                adj_cells[get_cell_id(ri, j, k)].push_back(get_cell_id(i, j, k));   // right on x axis
+                adj_cells[get_cell_id(i, rj, k)].push_back(get_cell_id(i, j, k));   // right on y axis
+                adj_cells[get_cell_id(i, j, rk)].push_back(get_cell_id(i, j, k));   // right on z axis
+
+                adj_cells[get_cell_id(li, lj, k)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(li, j, lk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(i, lj, lk)].push_back(get_cell_id(i, j, k));
+
+                adj_cells[get_cell_id(li, rj, k)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(li, j, rk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(ri, lj, k)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(ri, j, rk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(i, rj, lk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(i, lj, rk)].push_back(get_cell_id(i, j, k));
+
+                adj_cells[get_cell_id(ri, rj, k)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(ri, j, rk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(i, rj, rk)].push_back(get_cell_id(i, j, k));
+
+                adj_cells[get_cell_id(li, lj, lk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(ri, rj, rk)].push_back(get_cell_id(i, j, k));
+
+                adj_cells[get_cell_id(li, lj, rk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(li, rj, lk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(ri, lj, lk)].push_back(get_cell_id(i, j, k));
+
+                adj_cells[get_cell_id(ri, rj, lk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(ri, lj, rk)].push_back(get_cell_id(i, j, k));
+                adj_cells[get_cell_id(li, rj, rk)].push_back(get_cell_id(i, j, k));
+            }
+        }
+    }
+
+    return adj_cells;
 }
