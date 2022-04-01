@@ -53,7 +53,7 @@ double calc_dist(Particle p1, Particle p2) {
     // return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
 }
 
-int Grid::get_cell_id(unsigned int x, unsigned int y, unsigned int z) const {
+int Grid::get_cell_id(int x, int y, int z) const {
     return x*dim_cells*dim_cells + y*dim_cells + z;
 };
 
@@ -97,7 +97,7 @@ void Grid::fill(size_t n) {
         y = (Ly - sigma) * random_double(0, 1);
         z = (Lz - sigma) * random_double(0, 1);
 
-        Particle particle{x, y, z, sigma};
+        particle = Particle(x, y, z, sigma);
 
         for (Particle p : particles) {
             if (calc_dist(p, particle) <= sigma) {
@@ -113,11 +113,10 @@ void Grid::fill(size_t n) {
     }
 }
 
-void Grid::move() {
+void Grid::move(double dispmax) {
     bool flag = true;
     size_t count = 0;
     double sigma = 1.0;
-    double dispmax = 0.2;   // TODO: unhardcode
 
     for (size_t j = 0; j < particles.size(); j++) {
         double new_x = particles[j].get_x() + random_double(-1, 1);
@@ -137,6 +136,14 @@ void Grid::move() {
         double x = particles[j].get_x() + vec_x * dispmax;
         double y = particles[j].get_y() + vec_y * dispmax;
         double z = particles[j].get_z() + vec_z * dispmax;
+
+        if (x > Lx) x -= Lx;
+        if (y > Ly) y -= Ly;
+        if (z > Lz) z -= Lz;
+
+        if (x < 0) x += Lx;
+        if (y < 0) y += Ly;
+        if (z < 0) z += Lz;
 
         for (size_t i = 0; i < particles.size(); i++) {
             if (i == j)

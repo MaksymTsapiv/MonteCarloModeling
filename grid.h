@@ -31,10 +31,10 @@ public:
     void set_Ly(double y);
     void set_Lz(double z);
 
-    int get_cell_id(unsigned int x, unsigned int y, unsigned int z) const;
+    int get_cell_id(int x, int y, int z) const;
 
     void fill(size_t n);
-    void move();
+    void move(double dispmax);
     void export_to_pdb(std::string fn);
 };
 
