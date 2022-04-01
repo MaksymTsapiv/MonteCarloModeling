@@ -15,11 +15,17 @@ private:
 
 public:
     Grid() : Lx(0), Ly(0), Lz(0) {}
-    Grid(double x, double y, double z, unsigned int dim_cells_) : Lx(x), Ly(y), Lz(z), dim_cells(dim_cells_) {
+    Grid(double x, double y, double z, unsigned int dim_cells_) {
+        Lx = x;
+        Ly = y;
+        Lz = z;
         cells.reserve(dim_cells_ * dim_cells_ * dim_cells_);
     }
     Grid(double x, double y, double z) {
-        Grid(x, y, z, dim_cells);
+        Lx = x;
+        Ly = y;
+        Lz = z;
+        cells.reserve(dim_cells * dim_cells * dim_cells);
     }
     Grid operator=(const Grid &grid) = delete;
 

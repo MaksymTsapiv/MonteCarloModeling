@@ -102,9 +102,23 @@ void Grid::move() {
     double dispmax = 0.2;   // TODO: unhardcode
 
     for (size_t j = 0; j < particles.size(); j++) {
-        double x = particles[j].get_x() + random_double(0, dispmax);
-        double y = particles[j].get_y() + random_double(0, dispmax);
-        double z = particles[j].get_z() + random_double(0, dispmax);
+        double new_x = particles[j].get_x() + random_double(-1, 1);
+        double new_y = particles[j].get_y() + random_double(-1, 1);
+        double new_z = particles[j].get_z() + random_double(-1, 1);
+
+        double vec_x = new_x - particles[j].get_x();
+        double vec_y = new_y - particles[j].get_y();
+        double vec_z = new_z - particles[j].get_z();
+
+        double vec_length = sqrt(pow(vec_x, 2) + pow(vec_y, 2) + pow(vec_z, 2));
+
+        vec_x = vec_x / vec_length;
+        vec_y = vec_y / vec_length;
+        vec_z = vec_z / vec_length;
+
+        double x = particles[j].get_x() + vec_x * dispmax;
+        double y = particles[j].get_y() + vec_y * dispmax;
+        double z = particles[j].get_z() + vec_z * dispmax;
 
         for (size_t i = 0; i < particles.size(); i++) {
             if (i == j)
