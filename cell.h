@@ -21,6 +21,7 @@ public:
     idx3d get_index() const;
     void add_particle(int id);
     void remove_particle(int id);
+    std::vector<int> get_particles() const;
 };
 
 #endif //MODEL_CELL_H

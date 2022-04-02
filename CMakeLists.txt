@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.15)
 
 # It is used as your project's main executable name. 
 set(PROJECT_NAME model)
-set(PROJECT_SOURCES main.cpp particle.cpp grid.cpp parse_config.cpp)
-set(PROJECT_HEADERS particle.h grid.h time_measurement.h parse_config.h)
+set(PROJECT_SOURCES main.cpp particle.cpp grid.cpp parse_config.cpp cell.cpp)
+set(PROJECT_HEADERS particle.h grid.h time_measurement.h parse_config.h cell.h)
 
 project(${PROJECT_NAME} CXX)
 

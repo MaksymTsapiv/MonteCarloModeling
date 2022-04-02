@@ -30,7 +30,7 @@ double Particle::get_sigma() const{
     return sigma;
 }
 
-double Particle::get_id() const{
+int Particle::get_id() const{
     return id;
 }
 

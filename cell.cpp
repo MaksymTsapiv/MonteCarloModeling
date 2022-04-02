@@ -17,3 +17,7 @@ void Cell::remove_particle(int id) {
         }
     }
 }
+
+std::vector<int> Cell::get_particles() const {
+    return particlesId;
+}
