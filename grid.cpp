@@ -162,15 +162,19 @@ void Grid::move(double dispmax) {
         if (y < 0) y += Ly;
         if (z < 0) z += Lz;
 
-        for (size_t i = 0; i < particles.size(); i++) {
-            if (i == j)
-                continue;
-            if (calc_dist(Particle(x, y, z, dispmax), particles[i]) < sigma) {
-                flag = false;
-                count++;
-                break;
+        for (auto &cell : cells) {
+            for (auto pid : cell.get_particles()) {
+                if (get_particle(pid).get_id() == particles[j].get_id())
+                    continue;
+
+                if (calc_dist(get_particle(pid), Particle(x, y, z, sigma)) <= sigma) {
+                    flag = false;
+                    count++;
+                    break;
+                }
             }
         }
+
         if (flag) {
             particles[j].set_x(x);
             particles[j].set_y(y);
@@ -318,6 +322,8 @@ std::map<int, std::vector<int>> Grid::compute_adj_cells() {
             {
                 int lk = k == 0 ? dim_cells - 1 : k - 1;
                 int rk = k == dim_cells - 1 ? 0 : k+1;
+
+                adj_cells[get_cell_id(i, j, k)].push_back(get_cell_id(i, j, k));    // self
 
                 adj_cells[get_cell_id(li, j, k)].push_back(get_cell_id(i, j, k));   // left on x axis
                 adj_cells[get_cell_id(i, lj, k)].push_back(get_cell_id(i, j, k));   // left on y axis
