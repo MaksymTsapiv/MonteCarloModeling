@@ -211,8 +211,8 @@ format(double fp_num, unsigned nint, unsigned nfrac) {
 constexpr auto COORD_MINT = 4;
 constexpr auto COORD_MFRAC = 3;
 
-constexpr auto OCC_MINT = 3;
-constexpr auto OCC_MFRAC = 2;
+constexpr auto OCCTEMP_MINT = 3;
+constexpr auto OCCTEMP_MFRAC = 2;
 
 static std::string
 fcoord (double coord) {
@@ -220,8 +220,8 @@ fcoord (double coord) {
 }
 
 static std::string
-focc (double occ) {
-    return format(occ, OCC_MINT, OCC_MFRAC);
+focctemp (double occtemp) {
+    return format(occtemp, OCCTEMP_MINT, OCCTEMP_MFRAC);
 }
 
 enum direction{left, right};
@@ -295,10 +295,17 @@ void Grid::export_to_pdb(std::string fn) {
     remove(fn.data());
     unsigned serial_num = 1;
     for (auto particle : particles) {
+
         std::string sn_str = std::to_string(serial_num);
-        ::export_to_pdb(fn, "ATOM", std::to_string(serial_num), "", "", "", "", "", "",
+
+        const std::string particle_type = "ATOM";
+        const std::string atom_name = "C";
+        const std::string sort_of_elem = std::to_string(1);
+        const std::string temp_factor = focctemp(0);
+
+        ::export_to_pdb(fn, particle_type, std::to_string(serial_num), atom_name, "", "", "", sort_of_elem, "",
                 fcoord(particle.get_x()), fcoord(particle.get_y()), fcoord(particle.get_z()),
-                focc(particle.get_sigma()), "", "", "", "");
+                focctemp(particle.get_sigma()), temp_factor, "", "", "");
         serial_num++;
     }
 }
