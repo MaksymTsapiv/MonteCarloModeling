@@ -16,6 +16,15 @@
 
 void Grid::common_initializer(int x, int y, int z){
     cells.reserve(dim_cells * dim_cells * dim_cells);
+
+    for (int i = 0; i < dim_cells; i++) {
+        for (int j = 0; j < dim_cells; j++) {
+            for (int k = 0; k < dim_cells; k++) {
+                cells.push_back(Cell(i, j, k));
+            }
+        }
+    }
+
     Lx = x;
     Ly = y;
     Lz = z;
@@ -77,6 +86,16 @@ void Grid::set_Lz(double z) {
     Lz = z;
 }
 
+
+Particle Grid::get_particle(int id) {
+    for (auto particle : particles) {
+        if (particle.get_id() == id) {
+            return particle;
+        }
+    }
+    return Particle();
+}
+
 void Grid::fill(size_t n) {
     bool flag = true;
     size_t count_tries = 0;
@@ -84,29 +103,27 @@ void Grid::fill(size_t n) {
 
     double sigma = 1.0;
 
-    double x = (Lx - sigma) * random_double(0, 1);
-    double y = (Ly - sigma) * random_double(0, 1);
-    double z = (Lz - sigma) * random_double(0, 1);
-
-    Particle particle = Particle(x, y, z, sigma);
-    particles.push_back(particle);
-
     while ((particles.size() < n) && count_tries < max_tries) {
 
-        x = (Lx - sigma) * random_double(0, 1);
-        y = (Ly - sigma) * random_double(0, 1);
-        z = (Lz - sigma) * random_double(0, 1);
+        double x = Lx * random_double(0, 1);
+        double y = Ly * random_double(0, 1);
+        double z = Lz * random_double(0, 1);
 
-        particle = Particle(x, y, z, sigma);
+        Particle particle = Particle(x, y, z, sigma);
 
-        for (Particle p : particles) {
-            if (calc_dist(p, particle) <= sigma) {
-                flag = false;
-                break;
+        for (auto &cell : cells) {
+            for (auto pid : cell.get_particles()) {
+                if (calc_dist(get_particle(pid), particle) <= sigma) {
+                    flag = false;
+                    break;
+                }
             }
         }
 
-        if (flag) particles.push_back(particle);
+        if (flag) {
+            particles.push_back(particle);
+            cells[get_cell_id(x, y, z)].add_particle(particle.get_id());
+        }
         flag = true;
 
         count_tries++;

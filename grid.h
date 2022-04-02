@@ -36,6 +36,8 @@ public:
     void fill(size_t n);
     void move(double dispmax);
     void export_to_pdb(std::string fn);
+
+    Particle get_particle(int id);
 };
 
 double random_double(double from, double to);
