@@ -8,9 +8,12 @@
 #include "parse_config.h"
 #include "time_measurement.h"
 #include "grid.h"
+#include "utils.h"
 
 
 int main(int argc, char* argv[]) {
+    // TODO: set seed
+
     double dispmax = 0.2;
     if (argc != 2) {
         std::cout << "Wrong arguments!" << std::endl;
@@ -28,18 +31,13 @@ int main(int argc, char* argv[]) {
 
     Grid grid(conf.Lx, conf.Ly, conf.Lz);
 
-    auto start1 = get_current_time_fenced();
     grid.fill(conf.N);
     grid.export_to_pdb("fill.pdb");
+    std::cout << rdf(3.0, 1.9, grid) << std::endl;
 
-    auto start2 = get_current_time_fenced();
     grid.move(dispmax);
     grid.export_to_pdb("move.pdb");
-
-
-    auto finish = get_current_time_fenced();
-
-    std::cout << "fill: " << to_us(start2 - start1)<< "\n" << "move: " << to_us(finish - start2) << std::endl;
+    std::cout << rdf(3.0, 1.9, grid) << std::endl;
 
     return 0;
 }

@@ -7,11 +7,11 @@
 #include <string>
 #include <cstddef>
 #include <random>
-#include <cmath>
 #include <vector>
 #include <iostream>
 #include "grid.h"
 #include "particle.h"
+#include "utils.h"
 
 
 void Grid::common_initializer(int x, int y, int z){
@@ -50,18 +50,6 @@ double random_double(double from, double to) {
 }
 
 
-double calc_dist(Particle p1, Particle p2) {
-    double x1 = p1.get_x();
-    double x2 = p2.get_x();
-    double y1 = p1.get_y();
-    double y2 = p2.get_y();
-    double z1 = p1.get_z();
-    double z2 = p2.get_z();
-
-    return hypot(hypot(x1 - x2, y1 - y2), z1 - z2);
-    // return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
-}
-
 int Grid::get_cell_id(int x, int y, int z) const {
     return x*dim_cells*dim_cells + y*dim_cells + z;
 };
@@ -87,7 +75,7 @@ void Grid::set_Lz(double z) {
 }
 
 
-Particle Grid::get_particle(int id) {
+Particle Grid::get_particle(int id) const {
     for (auto particle : particles) {
         if (particle.get_id() == id) {
             return particle;
@@ -95,6 +83,38 @@ Particle Grid::get_particle(int id) {
     }
     return Particle();
 }
+
+
+double Grid::get_volume() const {
+    return Lx * Ly * Lz;
+}
+
+size_t Grid::get_num_particles() const {
+    return particles.size();
+}
+
+double Grid::get_density() const {
+    return get_num_particles() / get_volume();
+}
+
+double Grid::distance(int id1, int id2) const {
+    auto x_dist = std::min(fabs(get_particle(id1).get_x() - get_particle(id2).get_x()),
+            Lx - fabs(get_particle(id1).get_x() - get_particle(id2).get_x()));
+
+    auto y_dist = std::min(fabs(get_particle(id1).get_y() - get_particle(id2).get_y()),
+            Ly - fabs(get_particle(id1).get_y() - get_particle(id2).get_y()));
+
+    auto z_dist = std::min(fabs(get_particle(id1).get_z() - get_particle(id2).get_z()),
+            Lz - fabs(get_particle(id1).get_z() - get_particle(id2).get_z()));
+
+    return sqrt(x_dist*x_dist + y_dist*y_dist + z_dist*z_dist);
+}
+
+
+std::vector<Particle> Grid::get_particles() const {
+    return particles;
+}
+
 
 void Grid::fill(size_t n) {
     bool flag = true;
@@ -113,7 +133,7 @@ void Grid::fill(size_t n) {
 
         for (auto &cell : cells) {
             for (auto pid : cell.get_particles()) {
-                if (calc_dist(get_particle(pid), particle) <= sigma) {
+                if (distance(pid, particle.get_id()) <= sigma) {
                     flag = false;
                     break;
                 }
@@ -376,13 +396,13 @@ std::map<int, std::vector<int>> Grid::compute_adj_cells() {
     // 100 * 100 * 100 * 27 * 4
 
     // print ajd_cells map
-    for (auto it = adj_cells.begin(); it != adj_cells.end(); ++it) {
-        std::cout << it->first << ": ";
-        for (auto it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
-            std::cout << *it2 << " ";
-        }
-        std::cout << std::endl;
-    }
+    //for (auto it = adj_cells.begin(); it != adj_cells.end(); ++it) {
+        //std::cout << it->first << ": ";
+        //for (auto it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
+            //std::cout << *it2 << " ";
+        //}
+        //std::cout << std::endl;
+    //}
 
     return adj_cells;
 }

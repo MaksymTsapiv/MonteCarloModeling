@@ -31,17 +31,22 @@ public:
     void set_Ly(double y);
     void set_Lz(double z);
 
+    double get_density() const;
+    double get_volume() const;
+    size_t get_num_particles() const;
+    std::vector<Particle> get_particles() const;
+
+    double distance(int id1, int id2) const;
+
     int get_cell_id(int x, int y, int z) const;
 
     void fill(size_t n);
     void move(double dispmax);
     void export_to_pdb(std::string fn);
 
-    Particle get_particle(int id);
+    Particle get_particle(int id) const;
 };
 
 double random_double(double from, double to);
-
-double calc_dist(Particle p1, Particle p2);
 
 #endif //MODEL_GRID_H
