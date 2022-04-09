@@ -131,7 +131,7 @@ void Grid::fill(size_t n) {
 }
 
 void Grid::move(double dispmax) {
-    bool flag = true;
+    bool not_intersected = true;
     size_t count = 0;
     double sigma = 1.0;
 
@@ -154,33 +154,37 @@ void Grid::move(double dispmax) {
         double y = particles[j].get_y() + vec_y * dispmax;
         double z = particles[j].get_z() + vec_z * dispmax;
 
-        if (x > Lx) x -= Lx;
-        if (y > Ly) y -= Ly;
-        if (z > Lz) z -= Lz;
+        if (x >= Lx) x -= Lx;
+        if (y >= Ly) y -= Ly;
+        if (z >= Lz) z -= Lz;
 
         if (x < 0) x += Lx;
         if (y < 0) y += Ly;
         if (z < 0) z += Lz;
 
         for (auto &cell : cells) {
+            bool exit = false;
             for (auto pid : cell.get_particles()) {
                 if (get_particle(pid).get_id() == particles[j].get_id())
                     continue;
 
                 if (calc_dist(get_particle(pid), Particle(x, y, z, sigma)) <= sigma) {
-                    flag = false;
+                    not_intersected = false;
+                    exit = true;
                     count++;
                     break;
                 }
             }
+            if (exit)
+                break;
         }
 
-        if (flag) {
+        if (not_intersected) {
             particles[j].set_x(x);
             particles[j].set_y(y);
             particles[j].set_z(z);
         }
-        flag = true;
+        not_intersected = true;
     }
 }
 
@@ -367,6 +371,17 @@ std::map<int, std::vector<int>> Grid::compute_adj_cells() {
                 adj_cells[get_cell_id(li, rj, rk)].push_back(get_cell_id(i, j, k));
             }
         }
+    }
+
+    // 100 * 100 * 100 * 27 * 4
+
+    // print ajd_cells map
+    for (auto it = adj_cells.begin(); it != adj_cells.end(); ++it) {
+        std::cout << it->first << ": ";
+        for (auto it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
+            std::cout << *it2 << " ";
+        }
+        std::cout << std::endl;
     }
 
     return adj_cells;
