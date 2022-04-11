@@ -3,7 +3,7 @@
 #include <map>
 #include <string>
 #include <algorithm>
-#include "parse_config.h"
+#include "parse_config.cuh"
 
 
 std::map<std::string, double> parse_conf(std::ifstream &file) {

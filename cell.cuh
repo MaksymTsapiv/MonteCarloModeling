@@ -1,9 +1,9 @@
-#ifndef MODEL_CELL_H
-#define MODEL_CELL_H
+#ifndef MODEL_CELL_CUH
+#define MODEL_CELL_CUH
 
 #include <vector>
 #include <string>
-#include "particle.h"
+#include "particle.cuh"
 
 struct idx3d {
     int x, y, z;
@@ -24,4 +24,4 @@ public:
     std::vector<size_t> get_particles() const;
 };
 
-#endif //MODEL_CELL_H
+#endif //MODEL_CELL_CUH
