@@ -4,10 +4,10 @@
 class Particle {
 private:
     double x_cor, y_cor, z_cor, sigma;
-    int id;
+    size_t id;
 
 public:
-    static unsigned int nextId;
+    static size_t nextId;
 
     Particle();
     Particle(double x, double y, double z, double sigma);
@@ -16,7 +16,7 @@ public:
     double get_y() const;
     double get_z() const;
     double get_sigma() const;
-    int get_id() const;
+    size_t get_id() const;
 
     void set_x(double x);
     void set_y(double y);

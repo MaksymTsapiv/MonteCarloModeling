@@ -5,12 +5,12 @@ idx3d Cell::get_index() const {
     return index;
 }
 
-void Cell::add_particle(int id) {
+void Cell::add_particle(size_t id) {
     particlesId.push_back(id);
 }
 
-void Cell::remove_particle(int id) {
-    for (auto i = 0; i < particlesId.size(); i++) {
+void Cell::remove_particle(size_t id) {
+    for (size_t i = 0; i < particlesId.size(); ++i) {
         if (i == id) {
             particlesId.erase(particlesId.begin() + i);
             return;
@@ -18,6 +18,6 @@ void Cell::remove_particle(int id) {
     }
 }
 
-std::vector<int> Cell::get_particles() const {
+std::vector<size_t> Cell::get_particles() const {
     return particlesId;
 }

@@ -1,9 +1,10 @@
 // This is a personal academic project. Dear PVS-Studio, please check it.
 // PVS-Studio Static Code Analyzer for C, C++, C#, and Java: http://www.viva64.com
 
+#include <cstddef>
 #include "particle.h"
 
-unsigned int Particle::nextId = 0;
+size_t Particle::nextId = 0;
 
 Particle::Particle() : x_cor(0), y_cor(0), z_cor(0), sigma(0), id(nextId)
 { nextId++; }
@@ -30,7 +31,7 @@ double Particle::get_sigma() const{
     return sigma;
 }
 
-int Particle::get_id() const{
+size_t Particle::get_id() const{
     return id;
 }
 

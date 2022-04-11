@@ -13,14 +13,33 @@
 #include "grid.h"
 #include "particle.h"
 
+double Grid::get_Lx() const{
+    return Lx;
+}
+double Grid::get_Ly() const{
+    return Ly;
+}
+double Grid::get_Lz() const{
+    return Lz;
+}
 
-void Grid::common_initializer(int x, int y, int z){
+void Grid::set_Lx(double x) {
+    Lx = x;
+}
+void Grid::set_Ly(double y) {
+    Ly = y;
+}
+void Grid::set_Lz(double z) {
+    Lz = z;
+}
+
+void Grid::common_initializer(double x, double y, double z){
     cells.reserve(dim_cells * dim_cells * dim_cells);
 
     for (int i = 0; i < dim_cells; i++) {
         for (int j = 0; j < dim_cells; j++) {
             for (int k = 0; k < dim_cells; k++) {
-                cells.push_back(Cell(i, j, k));
+                cells.emplace_back(i, j, k);
             }
         }
     }
@@ -30,16 +49,6 @@ void Grid::common_initializer(int x, int y, int z){
     Lz = z;
     compute_adj_cells();
 }
-
-Grid::Grid(double x, double y, double z) {
-    common_initializer(x, y, z);
-}
-
-Grid::Grid(double x, double y, double z, int dim_cells_) {
-    dim_cells = dim_cells_;
-    common_initializer(x, y, z);
-}
-
 
 double random_double(double from, double to) {
     std::random_device rd;
@@ -62,38 +71,17 @@ double calc_dist(Particle p1, Particle p2) {
     // return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
 }
 
-int Grid::get_cell_id(int x, int y, int z) const {
-    return x*dim_cells*dim_cells + y*dim_cells + z;
+size_t Grid::get_cell_id(double x, double y, double z) const {
+    return x * dim_cells * dim_cells + y * dim_cells + z;
 };
 
-double Grid::get_Lx() const{
-    return Lx;
-}
-double Grid::get_Ly() const{
-    return Ly;
-}
-double Grid::get_Lz() const{
-    return Lz;
-}
-
-void Grid::set_Lx(double x) {
-    Lx = x;
-}
-void Grid::set_Ly(double y) {
-    Ly = y;
-}
-void Grid::set_Lz(double z) {
-    Lz = z;
-}
-
-
-Particle Grid::get_particle(int id) {
+Particle Grid::get_particle(size_t id) {
     for (auto particle : particles) {
         if (particle.get_id() == id) {
             return particle;
         }
     }
-    return Particle();
+    return {};
 }
 
 void Grid::fill(size_t n) {
@@ -131,18 +119,18 @@ void Grid::fill(size_t n) {
 }
 
 void Grid::move(double dispmax) {
-    bool flag = true;
+    bool not_intersected = true;
     size_t count = 0;
     double sigma = 1.0;
 
-    for (size_t j = 0; j < particles.size(); j++) {
-        double new_x = particles[j].get_x() + random_double(-1, 1);
-        double new_y = particles[j].get_y() + random_double(-1, 1);
-        double new_z = particles[j].get_z() + random_double(-1, 1);
+    for (auto & particle : particles) {
+        double new_x = particle.get_x() + random_double(-1, 1);
+        double new_y = particle.get_y() + random_double(-1, 1);
+        double new_z = particle.get_z() + random_double(-1, 1);
 
-        double vec_x = new_x - particles[j].get_x();
-        double vec_y = new_y - particles[j].get_y();
-        double vec_z = new_z - particles[j].get_z();
+        double vec_x = new_x - particle.get_x();
+        double vec_y = new_y - particle.get_y();
+        double vec_z = new_z - particle.get_z();
 
         double vec_length = sqrt(pow(vec_x, 2) + pow(vec_y, 2) + pow(vec_z, 2));
 
@@ -150,37 +138,41 @@ void Grid::move(double dispmax) {
         vec_y = vec_y / vec_length;
         vec_z = vec_z / vec_length;
 
-        double x = particles[j].get_x() + vec_x * dispmax;
-        double y = particles[j].get_y() + vec_y * dispmax;
-        double z = particles[j].get_z() + vec_z * dispmax;
+        double x = particle.get_x() + vec_x * dispmax;
+        double y = particle.get_y() + vec_y * dispmax;
+        double z = particle.get_z() + vec_z * dispmax;
 
-        if (x > Lx) x -= Lx;
-        if (y > Ly) y -= Ly;
-        if (z > Lz) z -= Lz;
+        if (x >= Lx) x -= Lx;
+        if (y >= Ly) y -= Ly;
+        if (z >= Lz) z -= Lz;
 
         if (x < 0) x += Lx;
         if (y < 0) y += Ly;
         if (z < 0) z += Lz;
 
         for (auto &cell : cells) {
+            bool exit = false;
             for (auto pid : cell.get_particles()) {
-                if (get_particle(pid).get_id() == particles[j].get_id())
+                if (get_particle(pid).get_id() == particle.get_id())
                     continue;
 
                 if (calc_dist(get_particle(pid), Particle(x, y, z, sigma)) <= sigma) {
-                    flag = false;
+                    not_intersected = false;
+                    exit = true;
                     count++;
                     break;
                 }
             }
+            if (exit)
+                break;
         }
 
-        if (flag) {
-            particles[j].set_x(x);
-            particles[j].set_y(y);
-            particles[j].set_z(z);
+        if (not_intersected) {
+            particle.set_x(x);
+            particle.set_y(y);
+            particle.set_z(z);
         }
-        flag = true;
+        not_intersected = true;
     }
 }
 
@@ -226,8 +218,7 @@ focctemp (double occtemp) {
 
 enum direction{left, right};
 
-static std::string
-check_fill (std::string val, size_t len, direction align) {
+static std::string check_fill (std::string val, size_t len, direction align) {
     auto val_len = val.size();
     if (val_len == 0)
         for (auto i = len; i > 0; i--, val += " ");
@@ -235,7 +226,7 @@ check_fill (std::string val, size_t len, direction align) {
         throw std::invalid_argument("Invalid argument length (too long): expected " +
                                     std::to_string(len) + ", got " + std::to_string(val_len));
     else {
-        std::string xfix = "";
+        std::string xfix;
         for (auto i = val.size(); i < len; i++, xfix += " ");
         val = (align == right) ? xfix + val : val + xfix;
     }
@@ -313,9 +304,9 @@ void Grid::export_to_pdb(std::string fn) {
 /*
  * Find and return map where keys are cells and values are adjacent cells (excluding the key cell)
  */
-std::map<int, std::vector<int>> Grid::compute_adj_cells() {
+std::map<size_t, std::vector<size_t>> Grid::compute_adj_cells() const {
 
-    std::map<int, std::vector<int>> adj_cells;
+    std::map<size_t, std::vector<size_t>> adj_cells;
 
     for (auto i = 0; i < dim_cells; i++)
     {
@@ -368,6 +359,17 @@ std::map<int, std::vector<int>> Grid::compute_adj_cells() {
             }
         }
     }
+
+    // 100 * 100 * 100 * 27 * 4
+
+    // print ajd_cells map
+//    for (auto & adj_cell : adj_cells) {
+//        std::cout << adj_cell.first << ": ";
+//        for (int & it2 : adj_cell.second) {
+//            std::cout << it2 << " ";
+//        }
+//        std::cout << std::endl;
+//    }
 
     return adj_cells;
 }
