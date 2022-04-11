@@ -34,11 +34,11 @@ void Grid::set_Lz(double z) {
 }
 
 void Grid::common_initializer(double x, double y, double z){
-    cells.reserve(dim_cells * dim_cells * dim_cells);
+    cells.reserve(dim_cells.x * dim_cells.y * dim_cells.z);
 
-    for (int i = 0; i < dim_cells; i++) {
-        for (int j = 0; j < dim_cells; j++) {
-            for (int k = 0; k < dim_cells; k++) {
+    for (int i = 0; i < dim_cells.x; i++) {
+        for (int j = 0; j < dim_cells.y; j++) {
+            for (int k = 0; k < dim_cells.z; k++) {
                 cells.emplace_back(i, j, k);
             }
         }
@@ -47,7 +47,7 @@ void Grid::common_initializer(double x, double y, double z){
     Lx = x;
     Ly = y;
     Lz = z;
-    compute_adj_cells();
+    adj_cells = compute_adj_cells();
 }
 
 double random_double(double from, double to) {
@@ -72,7 +72,11 @@ double calc_dist(Particle p1, Particle p2) {
 }
 
 size_t Grid::get_cell_id(double x, double y, double z) const {
-    return x * dim_cells * dim_cells + y * dim_cells + z;
+    auto x_cell = static_cast<size_t>(floor(x / Lx * dim_cells.x));
+    auto y_cell = static_cast<size_t>(floor(y / Ly * dim_cells.y));
+    auto z_cell = static_cast<size_t>(floor(z / Lz * dim_cells.z));
+
+    return x_cell + y_cell * dim_cells.y + z_cell * dim_cells.z * dim_cells.z;
 };
 
 Particle Grid::get_particle(size_t id) {
@@ -150,7 +154,8 @@ void Grid::move(double dispmax) {
         if (y < 0) y += Ly;
         if (z < 0) z += Lz;
 
-        for (auto &cell : cells) {
+        for (auto cell_id : adj_cells[get_cell_id(particle.get_x(), particle.get_y(), particle.get_z())]) {
+            const auto &cell = cells[cell_id];
             bool exit = false;
             for (auto pid : cell.get_particles()) {
                 if (get_particle(pid).get_id() == particle.get_id())
@@ -308,18 +313,18 @@ std::map<size_t, std::vector<size_t>> Grid::compute_adj_cells() const {
 
     std::map<size_t, std::vector<size_t>> adj_cells;
 
-    for (auto i = 0; i < dim_cells; i++)
+    for (auto i = 0; i < dim_cells.x; i++)
     {
-        int li = i == 0 ? dim_cells - 1 : i - 1;
-        int ri = i == dim_cells - 1 ? 0 : i+1;
-        for (auto j = 0; j < dim_cells; j++)
+        int li = i == 0 ? dim_cells.x - 1 : i - 1;
+        int ri = i == dim_cells.x - 1 ? 0 : i+1;
+        for (auto j = 0; j < dim_cells.y; j++)
         {
-            int lj = j == 0 ? dim_cells - 1 : j - 1;
-            int rj = j == dim_cells - 1 ? 0 : j+1;
-            for (auto k = 0; k < dim_cells; k++)
+            int lj = j == 0 ? dim_cells.y - 1 : j - 1;
+            int rj = j == dim_cells.y - 1 ? 0 : j+1;
+            for (auto k = 0; k < dim_cells.z; k++)
             {
-                int lk = k == 0 ? dim_cells - 1 : k - 1;
-                int rk = k == dim_cells - 1 ? 0 : k+1;
+                int lk = k == 0 ? dim_cells.z - 1 : k - 1;
+                int rk = k == dim_cells.z - 1 ? 0 : k+1;
 
                 adj_cells[get_cell_id(i, j, k)].push_back(get_cell_id(i, j, k));    // self
 

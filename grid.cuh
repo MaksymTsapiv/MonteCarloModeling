@@ -6,19 +6,27 @@
 #include <string>
 #include "particle.cuh"
 #include "cell.cuh"
+#include "d3.cuh"
 
 class Grid {
 private:
-    int dim_cells = 10;
+    D3 dim_cells {10};
     double Lx{}, Ly{}, Lz{};
     std::vector<Particle> particles{};
     std::vector<Cell> cells{};
+    std::map<size_t, std::vector<size_t>> adj_cells;
+
     std::map<size_t, std::vector<size_t>> compute_adj_cells() const;
     void common_initializer(double x, double y, double z);
 
 public:
-    Grid(double x, double y, double z, int dim_cells_);
-    Grid(double x, double y, double z);
+    Grid(double x, double y, double z, double dim_cells_) {
+        dim_cells = D3{dim_cells_};
+        common_initializer(x, y, z);
+    }
+    Grid(double x, double y, double z) {
+        common_initializer(x, y, z);
+    }
     Grid operator=(const Grid &grid) = delete;
 
     double get_Lx() const;
@@ -37,16 +45,6 @@ public:
 
     Particle get_particle(size_t id);
 };
-
-
-Grid::Grid(double x, double y, double z) {
-    common_initializer(x, y, z);
-}
-
-Grid::Grid(double x, double y, double z, int dim_cells_) {
-    dim_cells = dim_cells_;
-    common_initializer(x, y, z);
-}
 
 
 double random_double(double from, double to);

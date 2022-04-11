@@ -18,7 +18,7 @@ set(CMAKE_CUDA_STANDARD 17)
 
 #  but sometimes it creates too much trouble, so default is OFF.
 set(PROJECT_SOURCES main.cu grid.cu particle.cu parse_config.cu cell.cu)
-set(PROJECT_HEADERS grid.cuh particle.cuh time_measurement.cuh parse_config.cuh cell.cuh)
+set(PROJECT_HEADERS grid.cuh particle.cuh time_measurement.cuh parse_config.cuh cell.cuh d3.cuh)
 
 
 
