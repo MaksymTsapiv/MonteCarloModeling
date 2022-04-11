@@ -1,5 +1,5 @@
 #include <algorithm>
-#include "cell.h"
+#include "cell.cuh"
 
 idx3d Cell::get_index() const {
     return index;

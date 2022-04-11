@@ -2,7 +2,7 @@
 // PVS-Studio Static Code Analyzer for C, C++, C#, and Java: http://www.viva64.com
 
 #include <cstddef>
-#include "particle.h"
+#include "particle.cuh"
 
 size_t Particle::nextId = 0;
 

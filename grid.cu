@@ -10,8 +10,8 @@
 #include <cmath>
 #include <vector>
 #include <iostream>
-#include "grid.h"
-#include "particle.h"
+#include "grid.cuh"
+#include "particle.cuh"
 
 double Grid::get_Lx() const{
     return Lx;

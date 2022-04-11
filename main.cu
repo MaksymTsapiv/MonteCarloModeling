@@ -5,9 +5,9 @@
 #include <chrono>
 #include <fstream>
 #include <atomic>
-#include "parse_config.h"
-#include "time_measurement.h"
-#include "grid.h"
+#include "parse_config.cuh"
+#include "time_measurement.cuh"
+#include "grid.cuh"
 
 
 int main(int argc, char* argv[]) {
