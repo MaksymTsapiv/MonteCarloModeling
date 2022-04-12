@@ -15,23 +15,23 @@ Particle::Particle(double x, double y, double z, double sigma) :
 { nextId++; }
 
 
-double Particle::get_x() const{
+__host__ __device__ double Particle::get_x() const{
     return x_cor;
 }
 
-double Particle::get_y() const{
+__host__ __device__ double Particle::get_y() const{
     return y_cor;
 }
 
-double Particle::get_z() const{
+__host__ __device__ double Particle::get_z() const{
     return z_cor;
 }
 
-double Particle::get_sigma() const{
+__host__ __device__ double Particle::get_sigma() const{
     return sigma;
 }
 
-size_t Particle::get_id() const{
+__host__ __device__ size_t Particle::get_id() const{
     return id;
 }
 

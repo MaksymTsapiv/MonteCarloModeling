@@ -12,11 +12,11 @@ public:
     Particle();
     Particle(double x, double y, double z, double sigma);
 
-    double get_x() const;
-    double get_y() const;
-    double get_z() const;
-    double get_sigma() const;
-    size_t get_id() const;
+    __host__ __device__ double get_x() const;
+    __host__ __device__ double get_y() const;
+    __host__ __device__ double get_z() const;
+    __host__ __device__ double get_sigma() const;
+    __host__ __device__ size_t get_id() const;
 
     void set_x(double x);
     void set_y(double y);

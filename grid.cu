@@ -10,16 +10,17 @@
 #include <cmath>
 #include <vector>
 #include <iostream>
+#include "cell.cuh"
 #include "grid.cuh"
 #include "particle.cuh"
 
-double Grid::get_Lx() const{
+__host__ __device__ double Grid::get_Lx() const{
     return Lx;
 }
-double Grid::get_Ly() const{
+__host__ __device__ double Grid::get_Ly() const{
     return Ly;
 }
-double Grid::get_Lz() const{
+__host__ __device__ double Grid::get_Lz() const{
     return Lz;
 }
 
@@ -59,7 +60,7 @@ double random_double(double from, double to) {
 }
 
 
-double calc_dist(Particle p1, Particle p2) {
+__host__ __device__ double calc_dist(Particle p1, Particle p2) {
     double x1 = p1.get_x();
     double x2 = p2.get_x();
     double y1 = p1.get_y();
@@ -79,7 +80,7 @@ size_t Grid::get_cell_id(double x, double y, double z) const {
     return x_cell + y_cell * dim_cells.y + z_cell * dim_cells.z * dim_cells.z;
 };
 
-Particle Grid::get_particle(size_t id) {
+__host__ __device__ Particle Grid::get_particle(size_t id) {
     for (auto particle : particles) {
         if (particle.get_id() == id) {
             return particle;
@@ -122,8 +123,50 @@ void Grid::fill(size_t n) {
     }
 }
 
+// This is temporary function just to make it work. TODO: make up a better design
+__device__ double calc_dist(double x1, double y1, double z1, double x2, double y2, double z2) {
+    return sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2) + pow(z1 - z2, 2));
+}
+
+__global__ void parent_kernel(Particle *p1, Particle *p, D3 grid_size, bool *intersects) {
+    if (p1->get_id() == p[threadIdx.x].get_id()) {
+        intersects[threadIdx.x] = false;
+        return;
+    }
+
+    auto sigma = p1->get_sigma();
+
+    auto x1 = p1->get_x();
+    auto y1 = p1->get_y();
+    auto z1 = p1->get_z();
+
+    auto x2 = p[threadIdx.x].get_x();
+    auto y2 = p[threadIdx.x].get_y();
+    auto z2 = p[threadIdx.x].get_z();
+
+    if (x1 >= grid_size.x/2)
+        x1 -= grid_size.x;
+    if (x2 >= grid_size.x/2)
+        x2 -= grid_size.x;
+
+    if (y1 >= grid_size.y/2)
+        y1 -= grid_size.y;
+    if (y2 >= grid_size.y/2)
+        y2 -= grid_size.y;
+
+    if (z1 >= grid_size.z/2)
+        z1 -= grid_size.z;
+    if (z2 >= grid_size.z/2)
+        z2 -= grid_size.z;
+
+    if (calc_dist(x1, y1, z1, x2, y2, z2) <= sigma) {
+        intersects[threadIdx.x] = true;
+        return;
+    }
+    intersects[threadIdx.x] = false;
+}
+
 void Grid::move(double dispmax) {
-    bool not_intersected = true;
     size_t count = 0;
     double sigma = 1.0;
 
@@ -154,22 +197,42 @@ void Grid::move(double dispmax) {
         if (y < 0) y += Ly;
         if (z < 0) z += Lz;
 
+        std::vector<Particle> all_particles;
         for (auto cell_id : adj_cells[get_cell_id(particle.get_x(), particle.get_y(), particle.get_z())]) {
             const auto &cell = cells[cell_id];
-            bool exit = false;
             for (auto pid : cell.get_particles()) {
                 if (get_particle(pid).get_id() == particle.get_id())
                     continue;
 
-                if (calc_dist(get_particle(pid), Particle(x, y, z, sigma)) <= sigma) {
-                    not_intersected = false;
-                    exit = true;
-                    count++;
-                    break;
-                }
+                all_particles.push_back(get_particle(pid));
             }
-            if (exit)
+        }
+
+        Particle particle_new = Particle(x, y, z, sigma);
+        Particle *particle_cuda;
+        cudaMalloc(&particle_cuda, sizeof(Particle));
+        cudaMemcpy(particle_cuda, &particle_new, sizeof(Particle), cudaMemcpyHostToDevice);
+
+        auto p_size = all_particles.size();
+
+        Particle *all_particles_cuda;
+        cudaMalloc(&all_particles_cuda, sizeof(Particle) * p_size);
+        cudaMemcpy(all_particles_cuda, all_particles.data(), sizeof(Particle) * p_size, cudaMemcpyHostToDevice);
+
+        bool *intersect_status;
+        cudaMalloc(&intersect_status, sizeof(bool)*p_size);
+
+        parent_kernel<<<1, p_size>>>(particle_cuda, all_particles_cuda, dim_cells, intersect_status);
+
+        bool *intersect_status_host = (bool *) malloc(sizeof(bool) * p_size);
+        cudaMemcpy(intersect_status_host, intersect_status, sizeof(bool)*p_size, cudaMemcpyDeviceToHost);
+
+        bool not_intersected = true;
+        for (size_t i = 0; i < p_size; i++) {
+            if (intersect_status_host[i]) {
+                not_intersected = false;
                 break;
+            }
         }
 
         if (not_intersected) {
@@ -177,7 +240,6 @@ void Grid::move(double dispmax) {
             particle.set_y(y);
             particle.set_z(z);
         }
-        not_intersected = true;
     }
 }
 

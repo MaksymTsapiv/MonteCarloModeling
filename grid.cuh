@@ -29,9 +29,9 @@ public:
     }
     Grid operator=(const Grid &grid) = delete;
 
-    double get_Lx() const;
-    double get_Ly() const;
-    double get_Lz() const;
+    __host__ __device__ double get_Lx() const;
+    __host__ __device__ double get_Ly() const;
+    __host__ __device__ double get_Lz() const;
 
     void set_Lx(double x);
     void set_Ly(double y);
@@ -43,12 +43,12 @@ public:
     void move(double dispmax);
     void export_to_pdb(std::string fn);
 
-    Particle get_particle(size_t id);
+    __host__ __device__ Particle get_particle(size_t id);
 };
 
 
 double random_double(double from, double to);
 
-double calc_dist(Particle p1, Particle p2);
+__host__ __device__ double calc_dist(Particle p1, Particle p2);
 
 #endif //MODEL_GRID_CUH
