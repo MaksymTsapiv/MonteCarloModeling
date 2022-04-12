@@ -52,8 +52,8 @@ void Grid::common_initializer(double x, double y, double z){
 }
 
 double random_double(double from, double to) {
-    std::random_device rd;
-    std::mt19937 rand_double(rd());
+    //std::random_device rd;
+    static std::mt19937 rand_double(1);
 
     std::uniform_real_distribution<> dist(from, to);
     return dist(rand_double);
