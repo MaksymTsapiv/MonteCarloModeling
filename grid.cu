@@ -10,7 +10,6 @@
 #include <cmath>
 #include <vector>
 #include <iostream>
-#include "cell.cuh"
 #include "grid.cuh"
 #include "particle.cuh"
 

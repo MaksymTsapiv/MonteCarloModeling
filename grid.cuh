@@ -5,7 +5,6 @@
 #include <vector>
 #include <string>
 #include "particle.cuh"
-#include "cell.cuh"
 #include "d3.cuh"
 
 class Grid {
