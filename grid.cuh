@@ -10,10 +10,15 @@
 class Grid {
 private:
     D3<double> dim_cells {10};
-    double Lx{}, Ly{}, Lz{};
+    D3<double> L {10};
     std::vector<Particle> particles{};
 
     void common_initializer(double x, double y, double z);
+
+    // On GPU
+    D3<double> *cudaL;
+    uint *cellStartIdx;
+    uint *cellEndIdx;
 
 public:
     Grid(double x, double y, double z, double dim_cells_) {

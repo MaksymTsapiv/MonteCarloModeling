@@ -14,29 +14,29 @@
 #include "particle.cuh"
 
 __host__ __device__ double Grid::get_Lx() const{
-    return Lx;
+    return L.x;
 }
 __host__ __device__ double Grid::get_Ly() const{
-    return Ly;
+    return L.y;
 }
 __host__ __device__ double Grid::get_Lz() const{
-    return Lz;
+    return L.z;
 }
 
 void Grid::set_Lx(double x) {
-    Lx = x;
+    L.x = x;
 }
 void Grid::set_Ly(double y) {
-    Ly = y;
+    L.y = y;
 }
 void Grid::set_Lz(double z) {
-    Lz = z;
+    L.z = z;
 }
 
-void Grid::common_initializer(double x, double y, double z){
-    Lx = x;
-    Ly = y;
-    Lz = z;
+void Grid::common_initializer(double x, double y, double z) {
+    L = D3<double>{x, y, z};
+    cudaMalloc(&cudaL, sizeof(D3<double>));
+    cudaMemcpy(cudaL, &L, sizeof(D3<double>), cudaMemcpyHostToDevice);
 }
 
 double random_double(double from, double to) {
@@ -61,12 +61,12 @@ __host__ __device__ double calc_dist(Particle p1, Particle p2) {
 }
 
 size_t Grid::get_cell_id(double x, double y, double z) const {
-    auto x_cell = static_cast<size_t>(floor(x / Lx * dim_cells.x));
-    auto y_cell = static_cast<size_t>(floor(y / Ly * dim_cells.y));
-    auto z_cell = static_cast<size_t>(floor(z / Lz * dim_cells.z));
+    auto x_cell = static_cast<size_t>(floor(x / L.x * dim_cells.x));
+    auto y_cell = static_cast<size_t>(floor(y / L.y * dim_cells.y));
+    auto z_cell = static_cast<size_t>(floor(z / L.z * dim_cells.z));
 
     return x_cell + y_cell * dim_cells.y + z_cell * dim_cells.z * dim_cells.z;
-};
+}
 
 __host__ __device__ Particle Grid::get_particle(size_t id) {
     for (auto particle : particles) {
@@ -75,6 +75,33 @@ __host__ __device__ Particle Grid::get_particle(size_t id) {
         }
     }
     return {};
+}
+
+__device__ double device_min(double a, double b) {
+    return a < b ? a : b;
+}
+
+__global__ void
+check_intersect (
+        Particle *particle,
+        Particle *ordered_particles,
+        uint startIdx,
+        D3<double> *L,
+        bool *intersects) {
+
+    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+    auto xd = device_min( fabs(particle->get_x() - ordered_particles[startIdx+idx].get_x()),
+                        L->x - fabs(particle->get_x() - ordered_particles[startIdx+idx].get_x()) );
+
+    auto yd = device_min( fabs(particle->get_y() - ordered_particles[startIdx+idx].get_y()),
+                        L->y - fabs(particle->get_y() - ordered_particles[startIdx+idx].get_y()) );
+
+    auto zd = device_min( fabs(particle->get_z() - ordered_particles[startIdx+idx].get_z()),
+                        L->z - fabs(particle->get_z() - ordered_particles[startIdx+idx].get_z()) );
+
+    auto dist = hypot(hypot(xd, yd), zd);
+    if (dist < particle->get_sigma())
+        intersects[idx] = true;
 }
 
 void Grid::fill(size_t n) {
@@ -86,25 +113,62 @@ void Grid::fill(size_t n) {
 
     while ((particles.size() < n) && count_tries < max_tries) {
 
-        double x = Lx * random_double(0, 1);
-        double y = Ly * random_double(0, 1);
-        double z = Lz * random_double(0, 1);
+        double x = L.x * random_double(0, 1);
+        double y = L.y * random_double(0, 1);
+        double z = L.z * random_double(0, 1);
 
         Particle particle = Particle(x, y, z, sigma);
 
+        Particle *cuda_particle;
+        cudaMalloc(&cuda_particle, sizeof(Particle));
+        cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
+
+        uint particle_cell_id = get_cell_id(particle.get_x(), particle.get_y(), particle.get_z());
 
         // TODO: implement
         // get particle cell id <particle_cell_id>
-        for (int z = -1; z <= 1; z++)
-            for (int y = -1; y <= 1; y++)
+        bool intersected = false;
+        for (int z = -1; z <= 1; z++){
+            for (int y = -1; y <= 1; y++){
                 for (int x = -1; x <= 1; x++) {
                     // Get current cell id <curr_cell_id>, relative to <particle_cell_id>
                     // Parallel check for intersect in <curr_cell_id>, passing <ordered_array>,
                     //    start index and end index for the <ordered_array>
-                    
                     // Kernel function saves result in arra of bools <intersects>
                     // Check the array <intersects>
+
+                    // Here periodic boundary conditions are ignored
+                    uint curr_cell_id = particle_cell_id + x + y*dim_cells.x +
+                        z*dim_cells.x*dim_cells.y;
+
+                    auto partInCell = cellEndIdx[curr_cell_id] - cellStartIdx[curr_cell_id];
+
+                    bool *intersectsCuda;
+                    cudaMalloc(&intersectsCuda, partInCell*sizeof(bool));
+                    cudaMemset(intersectsCuda, 0, partInCell*sizeof(bool));
+
+                    check_intersect<<<1, partInCell>>>( cuda_particle, particles.data(),
+                                                curr_cell_id, cudaL, intersectsCuda );
+
+                    bool *intersects = new bool[partInCell];
+                    cudaMemcpy(intersects, intersectsCuda, partInCell*sizeof(bool), cudaMemcpyDeviceToHost);
+
+                    cudaFree(intersects);
+                    cudaFree(cuda_particle);
+
+                    for (auto i = 0; i < partInCell; i++) {
+                        if (intersects[i]) {
+                            intersected = true;
+                            break;
+                        }
+                    }
+                    delete[] intersects;
+
                 }
+                if (intersected) break;
+            }
+            if (intersected) break;
+        }
 
         count_tries++;
     }
@@ -176,13 +240,13 @@ void Grid::move(double dispmax) {
         double y = particle.get_y() + vec_y * dispmax;
         double z = particle.get_z() + vec_z * dispmax;
 
-        if (x >= Lx) x -= Lx;
-        if (y >= Ly) y -= Ly;
-        if (z >= Lz) z -= Lz;
+        if (x >= L.x) x -= L.x;
+        if (y >= L.y) y -= L.y;
+        if (z >= L.z) z -= L.z;
 
-        if (x < 0) x += Lx;
-        if (y < 0) y += Ly;
-        if (z < 0) z += Lz;
+        if (x < 0) x += L.x;
+        if (y < 0) y += L.y;
+        if (z < 0) z += L.z;
 
         // TODO: implement
         // PROBLEM: with this approach we will have to iterate through the array of bools to
