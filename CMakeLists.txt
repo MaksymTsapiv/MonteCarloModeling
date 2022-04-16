@@ -17,8 +17,8 @@ set(CMAKE_CUDA_STANDARD 17)
 # and not CMake options --using options creates too much problem for students.
 
 #  but sometimes it creates too much trouble, so default is OFF.
-set(PROJECT_SOURCES main.cu grid.cu particle.cu parse_config.cu)
-set(PROJECT_HEADERS grid.cuh particle.cuh time_measurement.cuh parse_config.cuh d3.cuh)
+set(PROJECT_SOURCES main.cu grid.cu particle.cu parse_config.cu array.cu)
+set(PROJECT_HEADERS grid.cuh particle.cuh time_measurement.cuh parse_config.cuh d3.cuh array.cuh)
 
 
 
