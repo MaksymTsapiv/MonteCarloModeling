@@ -10,13 +10,10 @@
 
 class Grid {
 private:
-    D3 dim_cells {10};
+    D3<double> dim_cells {10};
     double Lx{}, Ly{}, Lz{};
     std::vector<Particle> particles{};
-    std::vector<Cell> cells{};
-    std::map<size_t, std::vector<size_t>> adj_cells;
 
-    std::map<size_t, std::vector<size_t>> compute_adj_cells() const;
     void common_initializer(double x, double y, double z);
 
 public:

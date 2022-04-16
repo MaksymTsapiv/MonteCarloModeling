@@ -35,20 +35,9 @@ void Grid::set_Lz(double z) {
 }
 
 void Grid::common_initializer(double x, double y, double z){
-    cells.reserve(dim_cells.x * dim_cells.y * dim_cells.z);
-
-    for (int i = 0; i < dim_cells.x; i++) {
-        for (int j = 0; j < dim_cells.y; j++) {
-            for (int k = 0; k < dim_cells.z; k++) {
-                cells.emplace_back(i, j, k);
-            }
-        }
-    }
-
     Lx = x;
     Ly = y;
     Lz = z;
-    adj_cells = compute_adj_cells();
 }
 
 double random_double(double from, double to) {
@@ -104,20 +93,19 @@ void Grid::fill(size_t n) {
 
         Particle particle = Particle(x, y, z, sigma);
 
-        for (auto &cell : cells) {
-            for (auto pid : cell.get_particles()) {
-                if (calc_dist(get_particle(pid), particle) <= sigma) {
-                    flag = false;
-                    break;
-                }
-            }
-        }
 
-        if (flag) {
-            particles.push_back(particle);
-            cells[get_cell_id(x, y, z)].add_particle(particle.get_id());
-        }
-        flag = true;
+        // TODO: implement
+        // get particle cell id <particle_cell_id>
+        for (int z = -1; z <= 1; z++)
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++) {
+                    // Get current cell id <curr_cell_id>, relative to <particle_cell_id>
+                    // Parallel check for intersect in <curr_cell_id>, passing <ordered_array>,
+                    //    start index and end index for the <ordered_array>
+                    
+                    // Kernel function saves result in arra of bools <intersects>
+                    // Check the array <intersects>
+                }
 
         count_tries++;
     }
@@ -128,7 +116,7 @@ __device__ double calc_dist(double x1, double y1, double z1, double x2, double y
     return sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2) + pow(z1 - z2, 2));
 }
 
-__global__ void parent_kernel(Particle *p1, Particle *p, D3 grid_size, bool *intersects) {
+__global__ void parent_kernel(Particle *p1, Particle *p, D3<double> grid_size, bool *intersects) {
     if (p1->get_id() == p[threadIdx.x].get_id()) {
         intersects[threadIdx.x] = false;
         return;
@@ -197,44 +185,22 @@ void Grid::move(double dispmax) {
         if (y < 0) y += Ly;
         if (z < 0) z += Lz;
 
-        std::vector<Particle> all_particles;
-        for (auto cell_id : adj_cells[get_cell_id(particle.get_x(), particle.get_y(), particle.get_z())]) {
-            const auto &cell = cells[cell_id];
-            for (auto pid : cell.get_particles()) {
-                if (get_particle(pid).get_id() == particle.get_id())
-                    continue;
-
-                all_particles.push_back(get_particle(pid));
-            }
-        }
-
-        Particle particle_new = Particle(x, y, z, sigma);
-        Particle *particle_cuda;
-        cudaMalloc(&particle_cuda, sizeof(Particle));
-        cudaMemcpy(particle_cuda, &particle_new, sizeof(Particle), cudaMemcpyHostToDevice);
-
-        auto p_size = all_particles.size();
-
-        Particle *all_particles_cuda;
-        cudaMalloc(&all_particles_cuda, sizeof(Particle) * p_size);
-        cudaMemcpy(all_particles_cuda, all_particles.data(), sizeof(Particle) * p_size, cudaMemcpyHostToDevice);
-
-        bool *intersect_status;
-        cudaMalloc(&intersect_status, sizeof(bool)*p_size);
-
-        parent_kernel<<<1, p_size>>>(particle_cuda, all_particles_cuda, dim_cells, intersect_status);
-
-        bool *intersect_status_host = (bool *) malloc(sizeof(bool) * p_size);
-        cudaMemcpy(intersect_status_host, intersect_status, sizeof(bool)*p_size, cudaMemcpyDeviceToHost);
+        // TODO: implement
+        // PROBLEM: with this approach we will have to iterate through the array of bools to
+        //    check if any thread of kernel function returned true
+        // Calculate <new_particle_coord_cell_id> -- cell id of the new particle position
+        for (int z = -1; z <= 1; z++)
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++) {
+                    // Get current cell id <curr_cell_id>, relative to <new_particle_coord_cell_id>
+                    // Parallel check for intersect in <curr_cell_id>, passing <ordered_array>,
+                    //    start index and end index for the <ordered_array> for current cell
+                    
+                    // Kernel function saves result in array of bools <intersects>
+                    // Check the array <intersects>
+                }
 
         bool not_intersected = true;
-        for (size_t i = 0; i < p_size; i++) {
-            if (intersect_status_host[i]) {
-                not_intersected = false;
-                break;
-            }
-        }
-
         if (not_intersected) {
             particle.set_x(x);
             particle.set_y(y);
@@ -366,77 +332,4 @@ void Grid::export_to_pdb(std::string fn) {
                 focctemp(particle.get_sigma()), temp_factor, "", "", "");
         serial_num++;
     }
-}
-
-/*
- * Find and return map where keys are cells and values are adjacent cells (excluding the key cell)
- */
-std::map<size_t, std::vector<size_t>> Grid::compute_adj_cells() const {
-
-    std::map<size_t, std::vector<size_t>> adj_cells;
-
-    for (auto i = 0; i < dim_cells.x; i++)
-    {
-        int li = i == 0 ? dim_cells.x - 1 : i - 1;
-        int ri = i == dim_cells.x - 1 ? 0 : i+1;
-        for (auto j = 0; j < dim_cells.y; j++)
-        {
-            int lj = j == 0 ? dim_cells.y - 1 : j - 1;
-            int rj = j == dim_cells.y - 1 ? 0 : j+1;
-            for (auto k = 0; k < dim_cells.z; k++)
-            {
-                int lk = k == 0 ? dim_cells.z - 1 : k - 1;
-                int rk = k == dim_cells.z - 1 ? 0 : k+1;
-
-                adj_cells[get_cell_id(i, j, k)].push_back(get_cell_id(i, j, k));    // self
-
-                adj_cells[get_cell_id(li, j, k)].push_back(get_cell_id(i, j, k));   // left on x axis
-                adj_cells[get_cell_id(i, lj, k)].push_back(get_cell_id(i, j, k));   // left on y axis
-                adj_cells[get_cell_id(i, j, lk)].push_back(get_cell_id(i, j, k));   // left on z axis
-
-                adj_cells[get_cell_id(ri, j, k)].push_back(get_cell_id(i, j, k));   // right on x axis
-                adj_cells[get_cell_id(i, rj, k)].push_back(get_cell_id(i, j, k));   // right on y axis
-                adj_cells[get_cell_id(i, j, rk)].push_back(get_cell_id(i, j, k));   // right on z axis
-
-                adj_cells[get_cell_id(li, lj, k)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(li, j, lk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(i, lj, lk)].push_back(get_cell_id(i, j, k));
-
-                adj_cells[get_cell_id(li, rj, k)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(li, j, rk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(ri, lj, k)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(ri, j, rk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(i, rj, lk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(i, lj, rk)].push_back(get_cell_id(i, j, k));
-
-                adj_cells[get_cell_id(ri, rj, k)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(ri, j, rk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(i, rj, rk)].push_back(get_cell_id(i, j, k));
-
-                adj_cells[get_cell_id(li, lj, lk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(ri, rj, rk)].push_back(get_cell_id(i, j, k));
-
-                adj_cells[get_cell_id(li, lj, rk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(li, rj, lk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(ri, lj, lk)].push_back(get_cell_id(i, j, k));
-
-                adj_cells[get_cell_id(ri, rj, lk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(ri, lj, rk)].push_back(get_cell_id(i, j, k));
-                adj_cells[get_cell_id(li, rj, rk)].push_back(get_cell_id(i, j, k));
-            }
-        }
-    }
-
-    // 100 * 100 * 100 * 27 * 4
-
-    // print ajd_cells map
-//    for (auto & adj_cell : adj_cells) {
-//        std::cout << adj_cell.first << ": ";
-//        for (int & it2 : adj_cell.second) {
-//            std::cout << it2 << " ";
-//        }
-//        std::cout << std::endl;
-//    }
-
-    return adj_cells;
 }
