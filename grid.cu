@@ -33,12 +33,6 @@ void Grid::set_Lz(double z) {
     L.z = z;
 }
 
-void Grid::common_initializer(double x, double y, double z) {
-    L = D3<double>{x, y, z};
-    cudaMalloc(&cudaL, sizeof(D3<double>));
-    cudaMemcpy(cudaL, &L, sizeof(D3<double>), cudaMemcpyHostToDevice);
-}
-
 double random_double(double from, double to) {
     //std::random_device rd;
     static std::mt19937 rand_double(1);
@@ -123,10 +117,9 @@ void Grid::fill(size_t n) {
         cudaMalloc(&cuda_particle, sizeof(Particle));
         cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
 
+        // TODO: check if it is correct
         uint particle_cell_id = get_cell_id(particle.get_x(), particle.get_y(), particle.get_z());
 
-        // TODO: implement
-        // get particle cell id <particle_cell_id>
         bool intersected = false;
         for (int z = -1; z <= 1; z++){
             for (int y = -1; y <= 1; y++){
@@ -138,15 +131,20 @@ void Grid::fill(size_t n) {
                     // Check the array <intersects>
 
                     // Here periodic boundary conditions are ignored
+                    // TODO: check if it is correct
                     uint curr_cell_id = particle_cell_id + x + y*dim_cells.x +
                         z*dim_cells.x*dim_cells.y;
 
                     auto partInCell = cellEndIdx[curr_cell_id] - cellStartIdx[curr_cell_id];
 
+                    if (partInCell == 0)
+                        continue;
+
                     bool *intersectsCuda;
                     cudaMalloc(&intersectsCuda, partInCell*sizeof(bool));
-                    cudaMemset(intersectsCuda, 0, partInCell*sizeof(bool));
+                    cudaMemset(intersectsCuda, false, partInCell*sizeof(bool));
 
+                    // TODO: consider different block sizes and threads number
                     check_intersect<<<1, partInCell>>>( cuda_particle, particles.data(),
                                                 curr_cell_id, cudaL, intersectsCuda );
 

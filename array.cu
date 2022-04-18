@@ -2,6 +2,16 @@
 #include "array.cuh"
 
 
+OrderedArray::OrderedArray(size_t capacity) {
+    this->size = 0;
+    this->capacity = capacity;
+    cudaMalloc(&data, sizeof(Particle) * capacity);
+}
+
+OrderedArray::~OrderedArray() {
+    cudaFree(data);
+}
+
 void OrderedArray::remove(size_t index) {
     if (index > size) {
         throw std::out_of_range("index out of range");

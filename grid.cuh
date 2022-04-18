@@ -6,14 +6,14 @@
 #include <string>
 #include "particle.cuh"
 #include "d3.cuh"
+#include "array.cuh"
 
 class Grid {
 private:
-    D3<double> dim_cells {10};
-    D3<double> L {10};
+    D3<double> dim_cells {10.0};
+    D3<double> L {10.0};
     std::vector<Particle> particles{};
-
-    void common_initializer(double x, double y, double z);
+    OrderedArray particles_ordered;
 
     // On GPU
     D3<double> *cudaL;
@@ -21,12 +21,16 @@ private:
     uint *cellEndIdx;
 
 public:
-    Grid(double x, double y, double z, double dim_cells_) {
-        dim_cells = D3{dim_cells_};
-        common_initializer(x, y, z);
+    Grid(double x, double y, double z, D3<double> dim_cells_) : Grid(x, y, z) {
+        dim_cells = dim_cells_;
     }
-    Grid(double x, double y, double z) {
-        common_initializer(x, y, z);
+    Grid(double x, double y, double z, double dim_cells_) : Grid(x, y, z) {
+        dim_cells = D3{dim_cells_};
+    }
+    Grid(double x, double y, double z) : particles_ordered(255) {
+        L = D3<double>{x, y, z};
+        cudaMalloc(&cudaL, sizeof(D3<double>));
+        cudaMemcpy(cudaL, &L, sizeof(D3<double>), cudaMemcpyHostToDevice);
     }
     Grid operator=(const Grid &grid) = delete;
 

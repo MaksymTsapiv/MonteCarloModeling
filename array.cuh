@@ -22,15 +22,4 @@ public:
     size_t getSize();
 };
 
-
-OrderedArray::OrderedArray(size_t capacity) {
-    this->size = 0;
-    this->capacity = capacity;
-    cudaMalloc(&data, sizeof(Particle) * capacity);
-}
-
-OrderedArray::~OrderedArray() {
-    cudaFree(data);
-}
-
 #endif //MODEL_ARRAY_CUH
