@@ -26,20 +26,20 @@ int main(int argc, char* argv[]) {
 
     auto conf = Config::from_map(config);
 
-    Grid grid(conf.Lx, conf.Ly, conf.Lz);
+    Grid grid(conf.Lx, conf.Ly, conf.Lz, 256);
 
     auto start1 = get_current_time_fenced();
     grid.fill(conf.N);
     grid.export_to_pdb("fill.pdb");
 
-    auto start2 = get_current_time_fenced();
-    grid.move(dispmax);
-    grid.export_to_pdb("move.pdb");
+    //auto start2 = get_current_time_fenced();
+    //grid.move(dispmax);
+    //grid.export_to_pdb("move.pdb");
 
 
-    auto finish = get_current_time_fenced();
+    //auto finish = get_current_time_fenced();
 
-    std::cout << "fill: " << to_us(start2 - start1)<< "\n" << "move: " << to_us(finish - start2) << std::endl;
+    //std::cout << "fill: " << to_us(start2 - start1)<< "\n" << "move: " << to_us(finish - start2) << std::endl;
 
     return 0;
 }

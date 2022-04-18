@@ -5,6 +5,8 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#define INDEX_OUT_OF_RANGE 1
+
 class OrderedArray {
 private:
     size_t size;
@@ -15,8 +17,8 @@ public:
     OrderedArray(size_t capacity);
     ~OrderedArray();
 
-    void insert(Particle value, size_t index);
-    void remove(size_t index);
+    int insert(Particle value, size_t index);
+    int remove(size_t index);
 
     const Particle* get_array();
     size_t getSize();

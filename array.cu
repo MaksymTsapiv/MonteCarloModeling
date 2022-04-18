@@ -12,29 +12,40 @@ OrderedArray::~OrderedArray() {
     cudaFree(data);
 }
 
-void OrderedArray::remove(size_t index) {
+int OrderedArray::remove(size_t index) {
     if (index > size) {
-        throw std::out_of_range("index out of range");
+        return INDEX_OUT_OF_RANGE;
     }
     if (index == size - 1) {
         --size;
-        return;
+        return 0;
     }
     for (size_t i = index; i < size - 1; ++i) {
         data[i] = data[i + 1];
     }
     --size;
+
+    return 0;
 }
 
-void OrderedArray::insert(Particle value, size_t index) {
+// this is helper function for debugging, it prints all elements in particles array
+__global__ void print_kernel(Particle *particles, size_t size) {
+    for (int i = 0; i < size; i++) {
+        printf("particle[%i]: %f %f %f %f\n", i, particles[i].x, particles[i].y,
+                                particles[i].z, particles[i].sigma);
+    }
+}
+
+int OrderedArray::insert(Particle value, size_t index) {
     if (index > size) {
-        throw std::out_of_range("index out of range");
+        return INDEX_OUT_OF_RANGE;
     }
     for (size_t i = index; i < size; ++i) {
         data[i] = data[i + 1];
     }
-    data[index] = value;
+    cudaMemcpy(&data[index], &value, sizeof(Particle), cudaMemcpyHostToDevice);
     ++size;
+    return 0;
 }
 
 const Particle *OrderedArray::get_array() {

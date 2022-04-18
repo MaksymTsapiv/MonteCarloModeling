@@ -11,26 +11,52 @@
 class Grid {
 private:
     D3<double> dim_cells {10.0};
+    D3<double> cell_size {0.0};
     D3<double> L {10.0};
     std::vector<Particle> particles{};
+
+    /* number of particle in system */
+    size_t n = 0;
+
+    /* number of cells in system */
+    size_t n_cells = 0;
+
+    /************************ On GPU ************************/
+    D3<double> *cudaL;
     OrderedArray particles_ordered;
 
-    // On GPU
-    D3<double> *cudaL;
+    // Helper boolean array, needed in kernel funciton during intersection check
+    bool *intersectsCuda;
+
     uint *cellStartIdx;
-    uint *cellEndIdx;
+    /********************************************************/
 
 public:
-    Grid(double x, double y, double z, D3<double> dim_cells_) : Grid(x, y, z) {
+    Grid(double x, double y, double z, D3<double> dim_cells_, size_t n_particles) :
+        Grid(x, y, z, n_particles)
+    {
         dim_cells = dim_cells_;
     }
-    Grid(double x, double y, double z, double dim_cells_) : Grid(x, y, z) {
-        dim_cells = D3{dim_cells_};
-    }
-    Grid(double x, double y, double z) : particles_ordered(255) {
+    Grid(double x, double y, double z, size_t n_particles) : particles_ordered(n_particles)
+    {
         L = D3<double>{x, y, z};
+        cell_size = D3 {L.x / dim_cells.x, L.y / dim_cells.y, L.z / dim_cells.z};
+
+        n_cells = dim_cells.x * dim_cells.y * dim_cells.z;
+
         cudaMalloc(&cudaL, sizeof(D3<double>));
         cudaMemcpy(cudaL, &L, sizeof(D3<double>), cudaMemcpyHostToDevice);
+
+        cudaMalloc(&cellStartIdx, sizeof(uint) * n_cells);
+        cudaMemset(cellStartIdx, 0, sizeof(uint) * n_cells);
+
+        cudaMalloc(&intersectsCuda, n_particles*sizeof(bool));
+        cudaMemset(intersectsCuda, false, n_particles*sizeof(bool));
+    }
+    ~Grid() {
+        cudaFree(cudaL);
+        cudaFree(intersectsCuda);
+        cudaFree(cellStartIdx);
     }
     Grid operator=(const Grid &grid) = delete;
 
@@ -42,13 +68,19 @@ public:
     void set_Ly(double y);
     void set_Lz(double z);
 
-    size_t get_cell_id(double x, double y, double z) const;
+    /* returns cell coordinates in 3D space -- (x,y,z) */
+    template <typename T>
+    D3<uint> get_cell(D3<T> p) const;
+
+    template <typename T>
+    size_t cell_id(D3<T> p) const;
+
+    template <typename T>
+    uint cell_at_offset(D3<uint> init_cell, D3<T> offset) const;
 
     void fill(size_t n);
     void move(double dispmax);
     void export_to_pdb(std::string fn);
-
-    __host__ __device__ Particle get_particle(size_t id);
 };
 
 

@@ -43,32 +43,30 @@ double random_double(double from, double to) {
 
 
 __host__ __device__ double calc_dist(Particle p1, Particle p2) {
-    double x1 = p1.get_x();
-    double x2 = p2.get_x();
-    double y1 = p1.get_y();
-    double y2 = p2.get_y();
-    double z1 = p1.get_z();
-    double z2 = p2.get_z();
+    double x1 = p1.x;
+    double x2 = p2.x;
+    double y1 = p1.y;
+    double y2 = p2.y;
+    double z1 = p1.z;
+    double z2 = p2.z;
 
     return hypot(hypot(x1 - x2, y1 - y2), z1 - z2);
     // return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
 }
 
-size_t Grid::get_cell_id(double x, double y, double z) const {
-    auto x_cell = static_cast<size_t>(floor(x / L.x * dim_cells.x));
-    auto y_cell = static_cast<size_t>(floor(y / L.y * dim_cells.y));
-    auto z_cell = static_cast<size_t>(floor(z / L.z * dim_cells.z));
-
-    return x_cell + y_cell * dim_cells.y + z_cell * dim_cells.z * dim_cells.z;
+template <typename T>
+D3<uint> Grid::get_cell(D3<T> p) const {
+    uint c_x = static_cast<size_t>(floor( (p.x / L.x) * dim_cells.x) );
+    uint c_y = static_cast<size_t>(floor( (p.y / L.y) * dim_cells.y) );
+    uint c_z = static_cast<size_t>(floor( (p.z / L.z) * dim_cells.z) );
+    D3<uint> cell{c_x, c_y, c_z};
+    return cell;
 }
 
-__host__ __device__ Particle Grid::get_particle(size_t id) {
-    for (auto particle : particles) {
-        if (particle.get_id() == id) {
-            return particle;
-        }
-    }
-    return {};
+template <typename T>
+size_t Grid::cell_id(D3<T> p) const {
+    D3<uint> cell = get_cell(p);
+    return cell.x + cell.y * dim_cells.y + cell.z * dim_cells.z * dim_cells.z;
 }
 
 __device__ double device_min(double a, double b) {
@@ -84,22 +82,27 @@ check_intersect (
         bool *intersects) {
 
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-    auto xd = device_min( fabs(particle->get_x() - ordered_particles[startIdx+idx].get_x()),
-                        L->x - fabs(particle->get_x() - ordered_particles[startIdx+idx].get_x()) );
+    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
+                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
 
-    auto yd = device_min( fabs(particle->get_y() - ordered_particles[startIdx+idx].get_y()),
-                        L->y - fabs(particle->get_y() - ordered_particles[startIdx+idx].get_y()) );
+    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
+                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
 
-    auto zd = device_min( fabs(particle->get_z() - ordered_particles[startIdx+idx].get_z()),
-                        L->z - fabs(particle->get_z() - ordered_particles[startIdx+idx].get_z()) );
+    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
+                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
 
     auto dist = hypot(hypot(xd, yd), zd);
-    if (dist < particle->get_sigma())
+    if (dist < particle->sigma)
         intersects[idx] = true;
+    else
+        intersects[idx] = false;
+}
+
+__global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
+    cellStartIdx[cell_idx+threadIdx.x]++;
 }
 
 void Grid::fill(size_t n) {
-    bool flag = true;
     size_t count_tries = 0;
     size_t max_tries = 10000 + n;
 
@@ -117,13 +120,15 @@ void Grid::fill(size_t n) {
         cudaMalloc(&cuda_particle, sizeof(Particle));
         cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
 
-        // TODO: check if it is correct
-        uint particle_cell_id = get_cell_id(particle.get_x(), particle.get_y(), particle.get_z());
+        D3<double> p_point = particle.get_coord();
+        D3<uint> p_cell = get_cell(p_point);
+        uint particle_cell_id = cell_id(p_point);
 
         bool intersected = false;
-        for (int z = -1; z <= 1; z++){
-            for (int y = -1; y <= 1; y++){
-                for (int x = -1; x <= 1; x++) {
+        // TODO: reimplement loop using a more ellegant approach, because this is ugly
+        for (double z = -cell_size.z; z <= cell_size.z; z+=cell_size.z) {
+            for (double y = -cell_size.y; y <= cell_size.y; y+=cell_size.y) {
+                for (double x = -cell_size.x; x <= cell_size.x; x+=cell_size.x) {
                     // Get current cell id <curr_cell_id>, relative to <particle_cell_id>
                     // Parallel check for intersect in <curr_cell_id>, passing <ordered_array>,
                     //    start index and end index for the <ordered_array>
@@ -131,18 +136,27 @@ void Grid::fill(size_t n) {
                     // Check the array <intersects>
 
                     // Here periodic boundary conditions are ignored
-                    // TODO: check if it is correct
-                    uint curr_cell_id = particle_cell_id + x + y*dim_cells.x +
-                        z*dim_cells.x*dim_cells.y;
 
-                    auto partInCell = cellEndIdx[curr_cell_id] - cellStartIdx[curr_cell_id];
+                    D3<double> offset = {x, y, z};
+                    D3<uint> curr_cell = get_cell(p_point + offset);
+                    uint curr_cell_id = cell_id(curr_cell);
+
+                    // number of particles in cell
+                    size_t partInCell = 0;
+                    
+                    uint *csi_cci = new uint;
+                    cudaMemcpy(csi_cci, (cellStartIdx+curr_cell_id), sizeof(uint), cudaMemcpyDeviceToHost);
+
+                    if (curr_cell_id == n_cells-1)
+                        partInCell = n - *csi_cci;
+                    else {
+                        uint *csi_ccip = new uint;
+                        cudaMemcpy(csi_ccip, (cellStartIdx+curr_cell_id+1), sizeof(uint), cudaMemcpyDeviceToHost);
+                        partInCell = *csi_ccip - *csi_cci;
+                    }
 
                     if (partInCell == 0)
                         continue;
-
-                    bool *intersectsCuda;
-                    cudaMalloc(&intersectsCuda, partInCell*sizeof(bool));
-                    cudaMemset(intersectsCuda, false, partInCell*sizeof(bool));
 
                     // TODO: consider different block sizes and threads number
                     check_intersect<<<1, partInCell>>>( cuda_particle, particles.data(),
@@ -150,9 +164,6 @@ void Grid::fill(size_t n) {
 
                     bool *intersects = new bool[partInCell];
                     cudaMemcpy(intersects, intersectsCuda, partInCell*sizeof(bool), cudaMemcpyDeviceToHost);
-
-                    cudaFree(intersects);
-                    cudaFree(cuda_particle);
 
                     for (auto i = 0; i < partInCell; i++) {
                         if (intersects[i]) {
@@ -168,7 +179,22 @@ void Grid::fill(size_t n) {
             if (intersected) break;
         }
 
+        if (!intersected) {
+            particles.push_back(particle);
+            auto cell_idx = cell_id(p_cell);
+
+            // Cell start index of particle's cell
+            uint *partCellStartIdx = new uint;
+            cudaMemcpy(partCellStartIdx, &cellStartIdx[cell_idx], sizeof(uint), cudaMemcpyDeviceToHost);
+
+            particles_ordered.insert(particle, *partCellStartIdx);
+
+            // TODO: Variable block size
+            update_kernel<<<1, n_cells-cell_idx-1>>>(cellStartIdx, cell_idx+1);
+        }
+
         count_tries++;
+        cudaFree(cuda_particle);
     }
 }
 
@@ -178,20 +204,20 @@ __device__ double calc_dist(double x1, double y1, double z1, double x2, double y
 }
 
 __global__ void parent_kernel(Particle *p1, Particle *p, D3<double> grid_size, bool *intersects) {
-    if (p1->get_id() == p[threadIdx.x].get_id()) {
+    if (p1->id == p[threadIdx.x].id) {
         intersects[threadIdx.x] = false;
         return;
     }
 
-    auto sigma = p1->get_sigma();
+    auto sigma = p1->sigma;
 
-    auto x1 = p1->get_x();
-    auto y1 = p1->get_y();
-    auto z1 = p1->get_z();
+    auto x1 = p1->x;
+    auto y1 = p1->y;
+    auto z1 = p1->z;
 
-    auto x2 = p[threadIdx.x].get_x();
-    auto y2 = p[threadIdx.x].get_y();
-    auto z2 = p[threadIdx.x].get_z();
+    auto x2 = p[threadIdx.x].x;
+    auto y2 = p[threadIdx.x].y;
+    auto z2 = p[threadIdx.x].z;
 
     if (x1 >= grid_size.x/2)
         x1 -= grid_size.x;
@@ -220,13 +246,13 @@ void Grid::move(double dispmax) {
     double sigma = 1.0;
 
     for (auto & particle : particles) {
-        double new_x = particle.get_x() + random_double(-1, 1);
-        double new_y = particle.get_y() + random_double(-1, 1);
-        double new_z = particle.get_z() + random_double(-1, 1);
+        double new_x = particle.x + random_double(-1, 1);
+        double new_y = particle.y + random_double(-1, 1);
+        double new_z = particle.z + random_double(-1, 1);
 
-        double vec_x = new_x - particle.get_x();
-        double vec_y = new_y - particle.get_y();
-        double vec_z = new_z - particle.get_z();
+        double vec_x = new_x - particle.x;
+        double vec_y = new_y - particle.y;
+        double vec_z = new_z - particle.z;
 
         double vec_length = sqrt(pow(vec_x, 2) + pow(vec_y, 2) + pow(vec_z, 2));
 
@@ -234,9 +260,9 @@ void Grid::move(double dispmax) {
         vec_y = vec_y / vec_length;
         vec_z = vec_z / vec_length;
 
-        double x = particle.get_x() + vec_x * dispmax;
-        double y = particle.get_y() + vec_y * dispmax;
-        double z = particle.get_z() + vec_z * dispmax;
+        double x = particle.x + vec_x * dispmax;
+        double y = particle.y + vec_y * dispmax;
+        double z = particle.z + vec_z * dispmax;
 
         if (x >= L.x) x -= L.x;
         if (y >= L.y) y -= L.y;
@@ -263,9 +289,9 @@ void Grid::move(double dispmax) {
 
         bool not_intersected = true;
         if (not_intersected) {
-            particle.set_x(x);
-            particle.set_y(y);
-            particle.set_z(z);
+            particle.x = x;
+            particle.y = y;
+            particle.z = z;
         }
     }
 }
@@ -389,8 +415,8 @@ void Grid::export_to_pdb(std::string fn) {
         const std::string temp_factor = focctemp(0);
 
         ::export_to_pdb(fn, particle_type, std::to_string(serial_num), atom_name, "", "", "", sort_of_elem, "",
-                fcoord(particle.get_x()), fcoord(particle.get_y()), fcoord(particle.get_z()),
-                focctemp(particle.get_sigma()), temp_factor, "", "", "");
+                fcoord(particle.x), fcoord(particle.y), fcoord(particle.z),
+                focctemp(particle.sigma), temp_factor, "", "", "");
         serial_num++;
     }
 }

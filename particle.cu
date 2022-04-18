@@ -6,47 +6,15 @@
 
 size_t Particle::nextId = 0;
 
-Particle::Particle() : x_cor(0), y_cor(0), z_cor(0), sigma(0), id(nextId)
+Particle::Particle() : x(0), y(0), z(0), sigma(0), id(nextId)
 { nextId++; }
 
 
-Particle::Particle(double x, double y, double z, double sigma) :
-    x_cor(x), y_cor(y), z_cor(z), sigma(sigma), id(nextId)
+Particle::Particle(double x_, double y_, double z_, double sigma_) :
+    x(x_), y(y_), z(z_), sigma(sigma_), id(nextId)
 { nextId++; }
 
 
-__host__ __device__ double Particle::get_x() const{
-    return x_cor;
-}
-
-__host__ __device__ double Particle::get_y() const{
-    return y_cor;
-}
-
-__host__ __device__ double Particle::get_z() const{
-    return z_cor;
-}
-
-__host__ __device__ double Particle::get_sigma() const{
-    return sigma;
-}
-
-__host__ __device__ size_t Particle::get_id() const{
-    return id;
-}
-
-void Particle::set_x(double x) {
-    x_cor = x;
-}
-
-void Particle::set_y(double y) {
-    y_cor = y;
-}
-
-void Particle::set_z(double z) {
-    z_cor = z;
-}
-
-void Particle::set_sigma(double new_sigma) {
-    sigma = new_sigma;
+__host__ __device__ D3<double> Particle::get_coord() const {
+    return D3<double>(x, y, z);
 }
