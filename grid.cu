@@ -75,10 +75,10 @@ __device__ double device_min(double a, double b) {
 
 __global__ void
 check_intersect (
-        Particle *particle,
-        Particle *ordered_particles,
+        const Particle *particle,
+        const Particle *ordered_particles,
         uint startIdx,
-        D3<double> *L,
+        const D3<double> *L,
         bool *intersects) {
 
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -126,9 +126,9 @@ void Grid::fill(size_t n) {
 
         bool intersected = false;
         // TODO: reimplement loop using a more ellegant approach, because this is ugly
-        for (double z = -cell_size.z; z <= cell_size.z; z+=cell_size.z) {
-            for (double y = -cell_size.y; y <= cell_size.y; y+=cell_size.y) {
-                for (double x = -cell_size.x; x <= cell_size.x; x+=cell_size.x) {
+        for (double z_off = -cell_size.z; z_off <= cell_size.z; z_off+=cell_size.z) {
+            for (double y_off = -cell_size.y; y_off <= cell_size.y; y_off+=cell_size.y) {
+                for (double x_off = -cell_size.x; x_off <= cell_size.x; x_off+=cell_size.x) {
                     // Get current cell id <curr_cell_id>, relative to <particle_cell_id>
                     // Parallel check for intersect in <curr_cell_id>, passing <ordered_array>,
                     //    start index and end index for the <ordered_array>
@@ -137,7 +137,7 @@ void Grid::fill(size_t n) {
 
                     // Here periodic boundary conditions are ignored
 
-                    D3<double> offset = {x, y, z};
+                    D3<double> offset = {x_off, y_off, z_off};
                     D3<uint> curr_cell = get_cell(p_point + offset);
                     uint curr_cell_id = cell_id(curr_cell);
 
@@ -148,7 +148,7 @@ void Grid::fill(size_t n) {
                     cudaMemcpy(csi_cci, (cellStartIdx+curr_cell_id), sizeof(uint), cudaMemcpyDeviceToHost);
 
                     if (curr_cell_id == n_cells-1)
-                        partInCell = n - *csi_cci;
+                        partInCell = particles.size() - *csi_cci;
                     else {
                         uint *csi_ccip = new uint;
                         cudaMemcpy(csi_ccip, (cellStartIdx+curr_cell_id+1), sizeof(uint), cudaMemcpyDeviceToHost);
@@ -158,8 +158,9 @@ void Grid::fill(size_t n) {
                     if (partInCell == 0)
                         continue;
 
+                    const Particle *cuda_ordered_particles = particles_ordered.get_array();
                     // TODO: consider different block sizes and threads number
-                    check_intersect<<<1, partInCell>>>( cuda_particle, particles.data(),
+                    check_intersect<<<1, partInCell>>>( cuda_particle, cuda_ordered_particles,
                                                 curr_cell_id, cudaL, intersectsCuda );
 
                     bool *intersects = new bool[partInCell];
