@@ -1,6 +1,8 @@
 #ifndef TEMPLATE_TIME_MEASUREMENT_H
 #define TEMPLATE_TIME_MEASUREMENT_H
 
+#include <atomic>
+#include <chrono>
 
 inline std::chrono::high_resolution_clock::time_point get_current_time_fenced()
 {
