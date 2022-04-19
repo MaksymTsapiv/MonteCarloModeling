@@ -40,8 +40,8 @@ int OrderedArray::insert(Particle value, size_t index) {
     if (index > size) {
         return INDEX_OUT_OF_RANGE;
     }
-    for (size_t i = index; i < size; ++i) {
-        data[i] = data[i + 1];
+    for (size_t i = size; i > index; --i) {
+        cudaMemcpy(&data[i], &data[i - 1], sizeof(Particle), cudaMemcpyDeviceToDevice);
     }
     cudaMemcpy(&data[index], &value, sizeof(Particle), cudaMemcpyHostToDevice);
     ++size;
