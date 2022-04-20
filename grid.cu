@@ -55,10 +55,32 @@ __host__ __device__ double calc_dist(Particle p1, Particle p2) {
 }
 
 template <typename T>
+D3<T> Grid::normalize(const D3<T> p) const {
+    D3<double> new_p = p;
+
+    if (p.x < 0)
+        new_p.x = p.x + L.x;
+    if (p.y < 0)
+        new_p.y = p.y + L.y;
+    if (p.z < 0)
+        new_p.z = p.z + L.z;
+    if (p.x >= L.x)
+        new_p.x = p.x - L.x;
+    if (p.y >= L.y)
+        new_p.y = p.y - L.y;
+    if (p.z >= L.z)
+        new_p.z = p.z - L.z;
+
+    return new_p;
+}
+
+template <typename T>
 D3<uint> Grid::get_cell(D3<T> p) const {
-    uint c_x = static_cast<size_t>(floor( (p.x / L.x) * dim_cells.x) );
-    uint c_y = static_cast<size_t>(floor( (p.y / L.y) * dim_cells.y) );
-    uint c_z = static_cast<size_t>(floor( (p.z / L.z) * dim_cells.z) );
+    D3<double> new_p = normalize<double>(p.toD3double());
+
+    uint c_x = static_cast<size_t>(floor( (new_p.x / L.x) * dim_cells.x) );
+    uint c_y = static_cast<size_t>(floor( (new_p.y / L.y) * dim_cells.y) );
+    uint c_z = static_cast<size_t>(floor( (new_p.z / L.z) * dim_cells.z) );
     D3<uint> cell{c_x, c_y, c_z};
     return cell;
 }
@@ -108,6 +130,8 @@ void Grid::fill(size_t n) {
 
     double sigma = 1.0;
 
+    uint fails = 0;
+
     while ((particles.size() < n) && count_tries < max_tries) {
 
         double x = L.x * random_double(0, 1);
@@ -125,18 +149,11 @@ void Grid::fill(size_t n) {
         uint particle_cell_id = cell_id(p_point);
 
         bool intersected = false;
+        // TODO: Is it alright and accounts everything, using periodic boundary conditions?
         // TODO: reimplement loop using a more ellegant approach, because this is ugly
         for (double z_off = -cell_size.z; z_off <= cell_size.z; z_off+=cell_size.z) {
             for (double y_off = -cell_size.y; y_off <= cell_size.y; y_off+=cell_size.y) {
                 for (double x_off = -cell_size.x; x_off <= cell_size.x; x_off+=cell_size.x) {
-                    // Get current cell id <curr_cell_id>, relative to <particle_cell_id>
-                    // Parallel check for intersect in <curr_cell_id>, passing <ordered_array>,
-                    //    start index and end index for the <ordered_array>
-                    // Kernel function saves result in arra of bools <intersects>
-                    // Check the array <intersects>
-
-                    // Here periodic boundary conditions are ignored
-
                     D3<double> offset = {x_off, y_off, z_off};
                     D3<uint> curr_cell = get_cell(p_point + offset);
                     uint curr_cell_id = cell_id(curr_cell);
@@ -144,14 +161,17 @@ void Grid::fill(size_t n) {
                     // number of particles in cell
                     size_t partInCell = 0;
                     
+                    // start index of cell in ordered array of particles
                     uint *csi_cci = new uint;
-                    cudaMemcpy(csi_cci, (cellStartIdx+curr_cell_id), sizeof(uint), cudaMemcpyDeviceToHost);
+                    cudaMemcpy(csi_cci, (cellStartIdx+curr_cell_id), sizeof(uint),
+                                                            cudaMemcpyDeviceToHost);
 
                     if (curr_cell_id == n_cells-1)
                         partInCell = particles.size() - *csi_cci;
                     else {
                         uint *csi_ccip = new uint;
-                        cudaMemcpy(csi_ccip, (cellStartIdx+curr_cell_id+1), sizeof(uint), cudaMemcpyDeviceToHost);
+                        cudaMemcpy(csi_ccip, (cellStartIdx+curr_cell_id+1), sizeof(uint),
+                                                                    cudaMemcpyDeviceToHost);
                         partInCell = *csi_ccip - *csi_cci;
                     }
 
@@ -159,12 +179,13 @@ void Grid::fill(size_t n) {
                         continue;
 
                     const Particle *cuda_ordered_particles = particles_ordered.get_array();
-                    // TODO: consider different block sizes and threads number
+                    // TODO: Variable block size
                     check_intersect<<<1, partInCell>>>( cuda_particle, cuda_ordered_particles,
                                                 curr_cell_id, cudaL, intersectsCuda );
 
                     bool *intersects = new bool[partInCell];
-                    cudaMemcpy(intersects, intersectsCuda, partInCell*sizeof(bool), cudaMemcpyDeviceToHost);
+                    cudaMemcpy(intersects, intersectsCuda, partInCell*sizeof(bool),
+                                                            cudaMemcpyDeviceToHost);
 
                     for (auto i = 0; i < partInCell; i++) {
                         if (intersects[i]) {
@@ -180,13 +201,19 @@ void Grid::fill(size_t n) {
             if (intersected) break;
         }
 
+        if (intersected) {
+            fails++;
+            continue;
+        }
+
         if (!intersected) {
             particles.push_back(particle);
             auto cell_idx = cell_id(p_cell);
 
             // Cell start index of particle's cell
             uint *partCellStartIdx = new uint;
-            cudaMemcpy(partCellStartIdx, &cellStartIdx[cell_idx], sizeof(uint), cudaMemcpyDeviceToHost);
+            cudaMemcpy(partCellStartIdx, &cellStartIdx[cell_idx], sizeof(uint),
+                                                        cudaMemcpyDeviceToHost);
 
             particles_ordered.insert(particle, *partCellStartIdx);
 
@@ -197,6 +224,7 @@ void Grid::fill(size_t n) {
         count_tries++;
         cudaFree(cuda_particle);
     }
+    std::cout << "Fill complited with " << fails << " fails" << std::endl;
 }
 
 // This is temporary function just to make it work. TODO: make up a better design

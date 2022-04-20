@@ -68,6 +68,9 @@ public:
     void set_Ly(double y);
     void set_Lz(double z);
 
+    template<typename T>
+    D3<T> normalize(D3<T> p) const;
+
     /* returns cell coordinates in 3D space -- (x,y,z) */
     template <typename T>
     D3<uint> get_cell(D3<T> p) const;
