@@ -101,10 +101,12 @@ __global__ void
 check_intersect (
         const Particle *particle,
         const Particle *ordered_particles,
-        uint startIdx,
+        uint *cellStartIdx,
+        uint curr_cell_id,
         const D3<double> *L,
         bool *intersects) {
 
+    uint startIdx = cellStartIdx[curr_cell_id];
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
     auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
                         L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
@@ -183,7 +185,7 @@ void Grid::fill() {
                     const Particle *cuda_ordered_particles = particles_ordered.get_array();
                     // TODO: Variable block size
                     check_intersect<<<1, partInCell>>>( cuda_particle, cuda_ordered_particles,
-                                                curr_cell_id, cudaL, intersectsCuda );
+                                                cellStartIdx, curr_cell_id, cudaL, intersectsCuda );
 
                     bool *intersects = new bool[partInCell];
                     cudaMemcpy(intersects, intersectsCuda, partInCell*sizeof(bool),
