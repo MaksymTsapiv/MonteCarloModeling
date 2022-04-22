@@ -25,8 +25,9 @@ int main(int argc, char* argv[]) {
 
     Grid grid(conf.Lx, conf.Ly, conf.Lz, conf.N);
 
-    auto start1 = get_current_time_fenced();
+    auto start_fill = get_current_time_fenced();
     grid.fill();
+    auto finish_fill = get_current_time_fenced();
     grid.export_to_pdb("fill.pdb");
 
     //auto start2 = get_current_time_fenced();
@@ -37,7 +38,7 @@ int main(int argc, char* argv[]) {
 
     //auto finish = get_current_time_fenced();
 
-    //std::cout << "fill: " << to_us(start2 - start1)<< "\n" << "move: " << to_us(finish - start2) << std::endl;
+    std::cout << "fill: " << to_us(finish_fill- start_fill)  << " us" << std::endl;
 
     return 0;
 }

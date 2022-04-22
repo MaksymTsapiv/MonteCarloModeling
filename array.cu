@@ -52,6 +52,6 @@ const Particle *OrderedArray::get_array() {
     return data;
 }
 
-size_t OrderedArray::getSize() {
+size_t OrderedArray::getSize() const {
     return size;
 }

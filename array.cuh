@@ -21,7 +21,7 @@ public:
     int remove(size_t index);
 
     const Particle* get_array();
-    size_t getSize();
+    size_t getSize() const;
 };
 
 #endif //MODEL_ARRAY_CUH
