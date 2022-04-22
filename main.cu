@@ -2,9 +2,7 @@
 // PVS-Studio Static Code Analyzer for C, C++, C#, and Java: http://www.viva64.com
 
 #include <iostream>
-#include <chrono>
 #include <fstream>
-#include <atomic>
 #include "parse_config.cuh"
 #include "time_measurement.cuh"
 #include "grid.cuh"
@@ -25,10 +23,10 @@ int main(int argc, char* argv[]) {
 
     auto conf = Config::from_map(config);
 
-    Grid grid(conf.Lx, conf.Ly, conf.Lz, 256);
+    Grid grid(conf.Lx, conf.Ly, conf.Lz, conf.N);
 
     auto start1 = get_current_time_fenced();
-    grid.fill(conf.N);
+    grid.fill();
     grid.export_to_pdb("fill.pdb");
 
     //auto start2 = get_current_time_fenced();

@@ -37,7 +37,7 @@ public:
     {
         dim_cells = dim_cells_;
     }
-    Grid(double x, double y, double z, size_t n_particles) : particles_ordered(n_particles)
+    Grid(double x, double y, double z, size_t n_particles) : particles_ordered(n_particles), n(n_particles)
     {
         L = D3<double>{x, y, z};
         cell_size = D3 {L.x / dim_cells.x, L.y / dim_cells.y, L.z / dim_cells.z};
@@ -81,7 +81,7 @@ public:
     template <typename T>
     uint cell_at_offset(D3<uint> init_cell, D3<T> offset) const;
 
-    void fill(size_t n);
+    void fill();
     void move(double dispmax);
     void export_to_pdb(std::string fn);
 };

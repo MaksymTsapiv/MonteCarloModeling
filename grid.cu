@@ -35,6 +35,8 @@ void Grid::set_Lz(double z) {
 
 double random_double(double from, double to) {
     //std::random_device rd;
+    //static std::mt19937 rand_double(rd());
+
     static std::mt19937 rand_double(1);
 
     std::uniform_real_distribution<> dist(from, to);
@@ -124,7 +126,7 @@ __global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
     cellStartIdx[cell_idx+threadIdx.x]++;
 }
 
-void Grid::fill(size_t n) {
+void Grid::fill() {
     size_t count_tries = 0;
     size_t max_tries = 10000 + n;
 
@@ -218,7 +220,8 @@ void Grid::fill(size_t n) {
             particles_ordered.insert(particle, *partCellStartIdx);
 
             // TODO: Variable block size
-            update_kernel<<<1, n_cells-cell_idx-1>>>(cellStartIdx, cell_idx+1);
+            if (static_cast<int>(n_cells-cell_idx-1) > 0)
+                update_kernel<<<1, n_cells-cell_idx-1>>>(cellStartIdx, cell_idx+1);
         }
 
         count_tries++;
