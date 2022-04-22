@@ -14,7 +14,8 @@
 #include "utils.h"
 
 
-void Grid::common_initializer(int x, int y, int z){
+Grid::Grid(double x, double y, double z, int dim_cells_) {
+    dim_cells = dim_cells_;
     cells.reserve(dim_cells * dim_cells * dim_cells);
 
     for (int i = 0; i < dim_cells; i++) {
@@ -25,19 +26,12 @@ void Grid::common_initializer(int x, int y, int z){
         }
     }
 
+    n_cells_dim = Lx / dim_cells;
+
     Lx = x;
     Ly = y;
     Lz = z;
     compute_adj_cells();
-}
-
-Grid::Grid(double x, double y, double z) {
-    common_initializer(x, y, z);
-}
-
-Grid::Grid(double x, double y, double z, int dim_cells_) {
-    dim_cells = dim_cells_;
-    common_initializer(x, y, z);
 }
 
 
@@ -53,7 +47,7 @@ double random_double(double from, double to) {
 
 
 int Grid::get_cell_id(int x, int y, int z) const {
-    return x*dim_cells*dim_cells + y*dim_cells + z;
+    return x*n_cells_dim*n_cells_dim + y*n_cells_dim + z;
 };
 
 double Grid::get_Lx() const{
@@ -144,7 +138,8 @@ void Grid::fill(size_t n) {
 
         if (flag) {
             particles.push_back(particle);
-            cells[get_cell_id(x, y, z)].add_particle(particle.get_id());
+            auto cell_id = get_cell_id(x, y, z);
+            cells[cell_id].add_particle(particle.get_id());
         }
         flag = true;
 

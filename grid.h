@@ -10,6 +10,7 @@
 class Grid {
 private:
     int dim_cells = 10;
+    int n_cells_dim = 0;
     double Lx, Ly, Lz;
     std::vector<Particle> particles{};
     std::vector<Cell> cells{};
@@ -19,7 +20,6 @@ private:
 public:
     Grid() : Lx(0), Ly(0), Lz(0) {}
     Grid(double x, double y, double z, int dim_cells_);
-    Grid(double x, double y, double z);
 
     Grid operator=(const Grid &grid) = delete;
 
