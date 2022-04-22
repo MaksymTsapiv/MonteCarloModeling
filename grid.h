@@ -15,7 +15,7 @@ private:
     std::vector<Particle> particles{};
     std::vector<Cell> cells{};
     void common_initializer(int x, int y, int z);
-    std::map<int, std::vector<int>> compute_adj_cells();
+    std::map<int, std::vector<int>> compute_adj_cells() const;
 
 public:
     Grid() : Lx(0), Ly(0), Lz(0) {}

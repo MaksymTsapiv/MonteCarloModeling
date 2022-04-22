@@ -36,14 +36,15 @@ int main(int argc, char* argv[]) {
     grid.export_to_pdb("fill.pdb");
 //    std::cout << rdf(3.0, 1.9, grid) << std::endl;
 
-    auto move_start = get_current_time_fenced();
-    grid.move(dispmax);
-    auto move_end = get_current_time_fenced();
+//    auto move_start = get_current_time_fenced();
+//    grid.move(dispmax);
+//    auto move_end = get_current_time_fenced();
 
     grid.export_to_pdb("move.pdb");
 //    std::cout << rdf(3.0, 1.9, grid) << std::endl;
 
-    std::cout << "Fill time: " << to_us(fill_end - fill_start) << " us" << "\n" << "Move time: " << to_us(move_end - move_start) << " us" << std::endl;
+    std::cout << "Fill time: " << to_us(fill_end - fill_start) << " us\n";
+//    << "Move time: " << to_us(move_end - move_start) << " us" << std::endl;
 
     return 0;
 }
