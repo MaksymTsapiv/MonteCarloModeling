@@ -34,8 +34,8 @@ void Grid::set_Lz(double z) {
 }
 
 double random_double(double from, double to) {
-    //std::random_device rd;
-    //static std::mt19937 rand_double(rd());
+//    std::random_device rd;
+//    static std::mt19937 rand_double(rd());
 
     static std::mt19937 rand_double(1);
 
@@ -130,13 +130,13 @@ __global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
 
 void Grid::fill() {
     size_t count_tries = 0;
-    size_t max_tries = 10000 + n;
+    size_t max_tries = 100000;
 
     double sigma = 1.0;
 
     uint fails = 0;
 
-    while ((particles.size() < n) && count_tries < max_tries) {
+    while ((particles.size() < n) && fails < max_tries) {
 
         double x = L.x * random_double(0, 1);
         double y = L.y * random_double(0, 1);
@@ -154,7 +154,7 @@ void Grid::fill() {
 
         bool intersected = false;
         // TODO: Is it alright and accounts everything, using periodic boundary conditions?
-        // TODO: reimplement loop using a more ellegant approach, because this is ugly
+        // TODO: reimplement loop using a more elegant approach, because this is ugly
         for (double z_off = -cell_size.z; z_off <= cell_size.z; z_off+=cell_size.z) {
             for (double y_off = -cell_size.y; y_off <= cell_size.y; y_off+=cell_size.y) {
                 for (double x_off = -cell_size.x; x_off <= cell_size.x; x_off+=cell_size.x) {
@@ -163,7 +163,7 @@ void Grid::fill() {
                     uint curr_cell_id = cell_id(curr_cell);
 
                     // number of particles in cell
-                    size_t partInCell = 0;
+                    size_t partInCell;
                     
                     // start index of cell in ordered array of particles
                     uint *csi_cci = new uint;
@@ -206,12 +206,13 @@ void Grid::fill() {
         }
 
         if (intersected) {
-            fails++;
+            ++fails;
             continue;
         }
 
         if (!intersected) {
             particles.push_back(particle);
+            if (particles.size() % 1000 == 0) std::cout << "size = " << particles.size() << '\n';
             auto cell_idx = cell_id(p_cell);
 
             // Cell start index of particle's cell
@@ -229,7 +230,7 @@ void Grid::fill() {
         count_tries++;
         cudaFree(cuda_particle);
     }
-    std::cout << "Fill complited with " << fails << " fails" << std::endl;
+    std::cout << "Fill completed with " << fails << " fails" << std::endl;
 }
 
 // This is temporary function just to make it work. TODO: make up a better design
@@ -276,8 +277,8 @@ __global__ void parent_kernel(Particle *p1, Particle *p, D3<double> grid_size, b
 }
 
 void Grid::move(double dispmax) {
-    size_t count = 0;
-    double sigma = 1.0;
+//    size_t count = 0;
+//    double sigma = 1.0;
 
     for (auto & particle : particles) {
         double new_x = particle.x + random_double(-1, 1);
