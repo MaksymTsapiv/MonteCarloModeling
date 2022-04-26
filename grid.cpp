@@ -31,7 +31,7 @@ Grid::Grid(double x, double y, double z, int dim_cells_) {
     Lx = x;
     Ly = y;
     Lz = z;
-    compute_adj_cells();
+    adj_cells = compute_adj_cells();
 }
 
 
@@ -47,7 +47,7 @@ double random_double(double from, double to) {
 
 
 int Grid::get_cell_id(int x, int y, int z) const {
-    return x*n_cells_dim*n_cells_dim + y*n_cells_dim + z;
+    return x*dim_cells*dim_cells + y*dim_cells + z;
 };
 
 double Grid::get_Lx() const{
@@ -72,12 +72,10 @@ void Grid::set_Lz(double z) {
 
 
 Particle Grid::get_particle(int id) const {
-    for (auto particle : particles) {
-        if (particle.get_id() == id) {
-            return particle;
-        }
+    if (id < 0 || id > particles.size()) {
+        throw std::out_of_range("Particle id out of range");
     }
-    return Particle();
+    return particles[id];
 }
 
 
@@ -111,11 +109,18 @@ std::vector<Particle> Grid::get_particles() const {
     return particles;
 }
 
+idx3d Grid::get_cell(Particle p) {
+    int c_x = static_cast<int>(floor( (p.get_x() / Lx) * dim_cells) );
+    int c_y = static_cast<int>(floor( (p.get_y() / Ly) * dim_cells) );
+    int c_z = static_cast<int>(floor( (p.get_z() / Lz) * dim_cells) );
+    idx3d cell{c_x, c_y, c_z};
+    return cell;
+}
 
 void Grid::fill(size_t n) {
     bool flag = true;
     size_t count_tries = 0;
-    size_t max_tries = 10000 + n;
+    size_t max_tries = 10000 * n;
 
     double sigma = 1.0;
 
@@ -127,25 +132,34 @@ void Grid::fill(size_t n) {
 
         Particle particle = Particle(x, y, z, sigma);
 
-        for (auto &cell : cells) {
+        auto p_cell = get_cell(particle);
+        auto p_cell_id = get_cell_id(p_cell.x, p_cell.y, p_cell.z);
+        for (auto cell_id : adj_cells[p_cell_id]) {
+            Cell cell = cells[cell_id];
             for (auto pid : cell.get_particles()) {
-                if (distance(pid, particle.get_id()) <= sigma) {
+                if (calc_dist(get_particle(pid), particle, Lx, Ly, Lz) <= sigma) {
                     flag = false;
+                    Particle::nextId--;
                     break;
                 }
             }
+            if (!flag)
+                break;
         }
 
         if (flag) {
             particles.push_back(particle);
-            auto cell_id = get_cell_id(x, y, z);
-            cells[cell_id].add_particle(particle.get_id());
+            cells[p_cell_id].add_particle(particle.get_id());
+            //std::cout << particle.get_id() << ": " << particle.get_x() << ", "
+                //<< particle.get_y() << ", " << particle.get_z() << " -> "
+                //<< cells[p_cell_id].get_index().x << ", " << cells[p_cell_id].get_index().y << ", "
+                //<< cells[p_cell_id].get_index().z << "; cell_id: " << p_cell_id << std::endl;
         }
         flag = true;
 
         count_tries++;
     }
-    std::cout << count_tries << std::endl;
+    std::cout << "Tries: " << count_tries << std::endl;
 }
 
 void Grid::move(double dispmax) {
@@ -390,17 +404,6 @@ std::map<int, std::vector<int>> Grid::compute_adj_cells() const {
             }
         }
     }
-
-    // 100 * 100 * 100 * 27 * 4
-
-    // print ajd_cells map
-    //for (auto it = adj_cells.begin(); it != adj_cells.end(); ++it) {
-        //std::cout << it->first << ": ";
-        //for (auto it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
-            //std::cout << *it2 << " ";
-        //}
-        //std::cout << std::endl;
-    //}
 
     return adj_cells;
 }

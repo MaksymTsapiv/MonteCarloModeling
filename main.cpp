@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
 
     auto conf = Config::from_map(config);
 
-    Grid grid(conf.Lx, conf.Ly, conf.Lz, 28);
+    Grid grid(conf.Lx, conf.Ly, conf.Lz, conf.Lx);
 
     auto fill_start = get_current_time_fenced();
     grid.fill(conf.N);
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
 //    grid.move(dispmax);
 //    auto move_end = get_current_time_fenced();
 
-    grid.export_to_pdb("move.pdb");
+    //grid.export_to_pdb("move.pdb");
 //    std::cout << rdf(3.0, 1.9, grid) << std::endl;
 
     std::cout << "Fill time: " << to_us(fill_end - fill_start) << " us\n";

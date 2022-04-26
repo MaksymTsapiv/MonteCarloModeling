@@ -3,6 +3,21 @@
 #include "particle.h"
 #include "grid.h"
 
+double calc_dist(Particle p1, Particle p2, double Lx, double Ly, double Lz) {
+    double x1 = p1.get_x();
+    double x2 = p2.get_x();
+    double y1 = p1.get_y();
+    double y2 = p2.get_y();
+    double z1 = p1.get_z();
+    double z2 = p2.get_z();
+
+    auto x_dist = std::min(fabs(x1 - x2), Lx - fabs(x1 - x2));
+    auto y_dist = std::min(fabs(y1 - y2), Lx - fabs(y1 - y2));
+    auto z_dist = std::min(fabs(z1 - z2), Lx - fabs(z1 - z2));
+
+    return sqrt(x_dist*x_dist + y_dist*y_dist + z_dist*z_dist);
+}
+
 double calc_dist(Particle p1, Particle p2) {
     double x1 = p1.get_x();
     double x2 = p2.get_x();

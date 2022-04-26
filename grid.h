@@ -15,6 +15,7 @@ private:
     std::vector<Particle> particles{};
     std::vector<Cell> cells{};
     void common_initializer(int x, int y, int z);
+    std::map<int, std::vector<int>> adj_cells;
     std::map<int, std::vector<int>> compute_adj_cells() const;
 
 public:
@@ -38,6 +39,7 @@ public:
 
     double distance(int id1, int id2) const;
 
+    idx3d get_cell(Particle p);
     int get_cell_id(int x, int y, int z) const;
 
     void fill(size_t n);
