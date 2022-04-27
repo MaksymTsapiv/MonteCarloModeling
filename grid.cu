@@ -147,18 +147,11 @@ void Grid::fill() {
 
         D3<double> p_point = particle.get_coord();
         D3<int> p_cell = get_cell(p_point);
-//        size_t particle_cell_id = cell_id(p_point);
 
         bool intersected = false;
         // TODO: Is it alright and accounts everything, using periodic boundary conditions?
         // TODO: reimplement loop using a more elegant approach, because this is ugly
-//        for (double z_off = -cell_size.z; z_off <= cell_size.z; z_off+=cell_size.z) {
-//            for (double y_off = -cell_size.y; y_off <= cell_size.y; y_off+=cell_size.y) {
-//                for (double x_off = -cell_size.x; x_off <= cell_size.x; x_off+=cell_size.x) {
-//                    D3<double> offset = {x_off, y_off, z_off};
-//                    D3<uint> curr_cell = get_cell(p_point + offset);
-//                    uint curr_cell_id = cell_id(curr_cell);
-//
+
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
