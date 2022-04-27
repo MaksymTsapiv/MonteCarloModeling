@@ -149,8 +149,6 @@ void Grid::fill() {
         D3<int> p_cell = get_cell(p_point);
 
         bool intersected = false;
-        // TODO: Is it alright and accounts everything, using periodic boundary conditions?
-        // TODO: reimplement loop using a more elegant approach, because this is ugly
 
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
@@ -159,21 +157,7 @@ void Grid::fill() {
                     uint curr_cell_id = cell_id(p_cell + offset);
 
                     // number of particles in cell
-                    size_t partInCell;
-                    
-                    // start index of cell in ordered array of particles
-                    uint *csi_cci = new uint;
-                    cudaMemcpy(csi_cci, (cellStartIdx+curr_cell_id), sizeof(uint),
-                                                            cudaMemcpyDeviceToHost);
-
-                    if (curr_cell_id == n_cells-1)
-                        partInCell = particles.size() - *csi_cci;
-                    else {
-                        uint *csi_ccip = new uint;
-                        cudaMemcpy(csi_ccip, (cellStartIdx+curr_cell_id+1), sizeof(uint),
-                                                                    cudaMemcpyDeviceToHost);
-                        partInCell = *csi_ccip - *csi_cci;
-                    }
+                    size_t partInCell = partPerCell[curr_cell_id];
 
                     if (partInCell == 0)
                         continue;
@@ -204,12 +188,14 @@ void Grid::fill() {
             if (particles.size() % 1000 == 0) std::cout << "size = " << particles.size() << '\n';
             auto cell_idx = cell_id(p_cell);
 
-            // Cell start index of particle's cell
+            // Cell start index in ordered array for the current particle (which is inserted)
             uint *partCellStartIdx = new uint;
             cudaMemcpy(partCellStartIdx, &cellStartIdx[cell_idx], sizeof(uint),
                                                         cudaMemcpyDeviceToHost);
 
             particles_ordered.insert(particle, *partCellStartIdx);
+
+            partPerCell[cell_idx]++;
 
             // TODO: Variable block size
             if (static_cast<int>(n_cells-cell_idx-1) > 0)

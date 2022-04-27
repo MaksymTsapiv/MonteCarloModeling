@@ -16,6 +16,9 @@ private:
     D3<double> L {10.0};
     std::vector<Particle> particles{};
 
+    /* Number of particles in each cell */
+    uint *partPerCell;
+
     /* number of particle in system */
     size_t n = 0;
 
@@ -47,6 +50,9 @@ public:
 
         cudaMalloc(&cudaL, sizeof(D3<double>));
         cudaMemcpy(cudaL, &L, sizeof(D3<double>), cudaMemcpyHostToDevice);
+
+        partPerCell = new uint[n_cells];
+        memset(partPerCell, 0, sizeof(uint) * n_cells);
 
         cudaMalloc(&cellStartIdx, sizeof(uint) * n_cells);
         cudaMemset(cellStartIdx, 0, sizeof(uint) * n_cells);
