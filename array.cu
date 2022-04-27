@@ -40,10 +40,17 @@ int OrderedArray::insert(Particle value, size_t index) {
     if (index > size) {
         return INDEX_OUT_OF_RANGE;
     }
-    for (size_t i = size; i > index; --i) {
-        cudaMemcpy(&data[i], &data[i - 1], sizeof(Particle), cudaMemcpyDeviceToDevice);
-    }
+
+    auto parts_to_move = (size-index);
+
+    Particle *data_temp;
+    cudaMalloc(&data_temp, sizeof(Particle)*parts_to_move);
+
+    cudaMemcpy(data_temp, &data[index], parts_to_move*sizeof(Particle), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(&data[index+1], data_temp, parts_to_move*sizeof(Particle), cudaMemcpyDeviceToDevice);
+
     cudaMemcpy(&data[index], &value, sizeof(Particle), cudaMemcpyHostToDevice);
+
     ++size;
     return 0;
 }

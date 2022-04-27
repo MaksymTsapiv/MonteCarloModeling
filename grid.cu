@@ -12,6 +12,7 @@
 #include <iostream>
 #include "grid.cuh"
 #include "particle.cuh"
+#include "time_measurement.cuh"
 
 __host__ __device__ double Grid::get_Lx() const{
     return L.x;
@@ -133,6 +134,12 @@ void Grid::fill() {
 
     double sigma = 1.0;
 
+    long long fors_time = 0;
+    long long add_time = 0;
+
+    long long add_time1 = 0;
+    long long add_time2 = 0;
+
     while ((particles.size() < n) && count_tries < max_tries) {
 
         double x = L.x * random_double(0, 1);
@@ -150,6 +157,7 @@ void Grid::fill() {
 
         bool intersected = false;
 
+        auto for_start = get_current_time_fenced();
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
@@ -182,7 +190,10 @@ void Grid::fill() {
             }
             if (intersected) break;
         }
+        auto for_end = get_current_time_fenced();
+        fors_time += to_us(for_end - for_start);
 
+        auto add_start = get_current_time_fenced();
         if (!intersected) {
             particles.push_back(particle);
             if (particles.size() % 1000 == 0) std::cout << "size = " << particles.size() << '\n';
@@ -193,19 +204,34 @@ void Grid::fill() {
             cudaMemcpy(partCellStartIdx, &cellStartIdx[cell_idx], sizeof(uint),
                                                         cudaMemcpyDeviceToHost);
 
-            particles_ordered.insert(particle, *partCellStartIdx);
+            auto add_start2 = get_current_time_fenced();
 
+            particles_ordered.insert(particle, *partCellStartIdx);
             partPerCell[cell_idx]++;
+
+            auto add_end2 = get_current_time_fenced();
+            add_time2 += to_us(add_end2 - add_start2);
+
 
             // TODO: Variable block size
             if (static_cast<int>(n_cells-cell_idx-1) > 0)
                 update_kernel<<<1, n_cells-cell_idx-1>>>(cellStartIdx, cell_idx+1);
         }
+        auto add_end = get_current_time_fenced();
+        add_time += to_us(add_end - add_start);
 
         count_tries++;
         cudaFree(cuda_particle);
     }
     std::cout << "Tries: " << count_tries << std::endl;
+
+    std::cout << "Fors time: " << fors_time << std::endl;
+    std::cout << "Add time:  " << add_time << std::endl << std::endl;
+
+    std::cout << "Add time 1:  " << add_time1 << std::endl;
+    std::cout << "Add time 2:  " << add_time2 << std::endl;
+
+    std::cout << std::endl;
 }
 
 void Grid::move(double dispmax) {
