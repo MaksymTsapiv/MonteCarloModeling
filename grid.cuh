@@ -41,7 +41,7 @@ public:
     Grid(double x, double y, double z, size_t n_particles) : particles_ordered(n_particles), n(n_particles)
     {
         L = D3<double>{x, y, z};
-        cell_size = D3 {L.x / dim_cells.x, L.y / dim_cells.y, L.z / dim_cells.z};
+        cell_size = D3<double>{L.x / dim_cells.x, L.y / dim_cells.y, L.z / dim_cells.z};
 
         n_cells = dim_cells.x * dim_cells.y * dim_cells.z;
 
