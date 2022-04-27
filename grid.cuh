@@ -74,7 +74,7 @@ public:
 
     /* returns cell coordinates in 3D space -- (x,y,z) */
     template <typename T>
-    D3<uint> get_cell(D3<T> p) const;
+    D3<int> get_cell(D3<T> p) const;
 
     template <typename T>
     size_t cell_id(D3<T> p) const;
@@ -98,5 +98,43 @@ public:
 double random_double(double from, double to);
 
 __host__ __device__ double calc_dist(Particle p1, Particle p2);
+
+
+template <typename T>
+D3<T> Grid::normalize(const D3<T> p) const {
+    D3<double> new_p = p;
+
+    if (p.x < 0)
+        new_p.x = p.x + L.x;
+    if (p.y < 0)
+        new_p.y = p.y + L.y;
+    if (p.z < 0)
+        new_p.z = p.z + L.z;
+    if (p.x >= L.x)
+        new_p.x = p.x - L.x;
+    if (p.y >= L.y)
+        new_p.y = p.y - L.y;
+    if (p.z >= L.z)
+        new_p.z = p.z - L.z;
+
+    return new_p;
+}
+
+template <typename T>
+D3<int> Grid::get_cell(D3<T> p) const {
+    D3<double> new_p = normalize<double>(p.toD3double());
+
+    int c_x = static_cast<int>(floor( (new_p.x / L.x) * dim_cells.x) );
+    int c_y = static_cast<int>(floor( (new_p.y / L.y) * dim_cells.y) );
+    int c_z = static_cast<int>(floor( (new_p.z / L.z) * dim_cells.z) );
+    D3<int> cell{c_x, c_y, c_z};
+    return cell;
+}
+
+template <typename T>
+size_t Grid::cell_id(D3<T> p) const {
+    D3<int> cell = get_cell(p);
+    return cell.x + cell.y * dim_cells.y + cell.z * dim_cells.z * dim_cells.z;
+}
 
 #endif //MODEL_GRID_CUH

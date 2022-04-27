@@ -66,7 +66,7 @@ Particle Grid::get_particle(uint id) const {
             return p;
         }
     }
-    return Particle();
+    return {};
 }
 
 double Grid::volume() const {
@@ -94,43 +94,6 @@ double Grid::distance(int id1, int id2) const {
     return sqrt(x_dist*x_dist + y_dist*y_dist + z_dist*z_dist);
 }
 
-template <typename T>
-D3<T> Grid::normalize(const D3<T> p) const {
-    D3<double> new_p = p;
-
-    if (p.x < 0)
-        new_p.x = p.x + L.x;
-    if (p.y < 0)
-        new_p.y = p.y + L.y;
-    if (p.z < 0)
-        new_p.z = p.z + L.z;
-    if (p.x >= L.x)
-        new_p.x = p.x - L.x;
-    if (p.y >= L.y)
-        new_p.y = p.y - L.y;
-    if (p.z >= L.z)
-        new_p.z = p.z - L.z;
-
-    return new_p;
-}
-
-template <typename T>
-D3<uint> Grid::get_cell(D3<T> p) const {
-    D3<double> new_p = normalize<double>(p.toD3double());
-
-    uint c_x = static_cast<size_t>(floor( (new_p.x / L.x) * dim_cells.x) );
-    uint c_y = static_cast<size_t>(floor( (new_p.y / L.y) * dim_cells.y) );
-    uint c_z = static_cast<size_t>(floor( (new_p.z / L.z) * dim_cells.z) );
-    D3<uint> cell{c_x, c_y, c_z};
-    return cell;
-}
-
-template <typename T>
-size_t Grid::cell_id(D3<T> p) const {
-    D3<uint> cell = get_cell(p);
-    return cell.x + cell.y * dim_cells.y + cell.z * dim_cells.z * dim_cells.z;
-}
-
 __device__ double device_min(double a, double b) {
     return a < b ? a : b;
 }
@@ -139,7 +102,7 @@ __global__ void
 check_intersect (
         const Particle *particle,
         const Particle *ordered_particles,
-        uint *cellStartIdx,
+        const uint *cellStartIdx,
         uint curr_cell_id,
         const D3<double> *L,
         int *intersects) {
@@ -183,18 +146,24 @@ void Grid::fill() {
         cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
 
         D3<double> p_point = particle.get_coord();
-        D3<uint> p_cell = get_cell(p_point);
-        uint particle_cell_id = cell_id(p_point);
+        D3<int> p_cell = get_cell(p_point);
+//        size_t particle_cell_id = cell_id(p_point);
 
         bool intersected = false;
         // TODO: Is it alright and accounts everything, using periodic boundary conditions?
         // TODO: reimplement loop using a more elegant approach, because this is ugly
-        for (double z_off = -cell_size.z; z_off <= cell_size.z; z_off+=cell_size.z) {
-            for (double y_off = -cell_size.y; y_off <= cell_size.y; y_off+=cell_size.y) {
-                for (double x_off = -cell_size.x; x_off <= cell_size.x; x_off+=cell_size.x) {
-                    D3<double> offset = {x_off, y_off, z_off};
-                    D3<uint> curr_cell = get_cell(p_point + offset);
-                    uint curr_cell_id = cell_id(curr_cell);
+//        for (double z_off = -cell_size.z; z_off <= cell_size.z; z_off+=cell_size.z) {
+//            for (double y_off = -cell_size.y; y_off <= cell_size.y; y_off+=cell_size.y) {
+//                for (double x_off = -cell_size.x; x_off <= cell_size.x; x_off+=cell_size.x) {
+//                    D3<double> offset = {x_off, y_off, z_off};
+//                    D3<uint> curr_cell = get_cell(p_point + offset);
+//                    uint curr_cell_id = cell_id(curr_cell);
+//
+        for (auto z_off = -1; z_off <= 1; ++z_off) {
+            for (auto y_off = -1; y_off <= 1; ++y_off) {
+                for (auto x_off = -1; x_off <= 1; ++x_off) {
+                    D3<int> offset = {x_off, y_off, z_off};
+                    uint curr_cell_id = cell_id(p_cell + offset);
 
                     // number of particles in cell
                     size_t partInCell;
