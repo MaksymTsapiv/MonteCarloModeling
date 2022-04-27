@@ -10,7 +10,8 @@
 
 class Grid {
 private:
-    D3<double> dim_cells {10.0};
+    /* Number of cells per each dimention */
+    D3<uint> dim_cells {10};
     D3<double> cell_size {0.0};
     D3<double> L {10.0};
     std::vector<Particle> particles{};
@@ -32,7 +33,7 @@ private:
     /********************************************************/
 
 public:
-    Grid(double x, double y, double z, D3<double> dim_cells_, size_t n_particles) :
+    Grid(double x, double y, double z, D3<uint> dim_cells_, size_t n_particles) :
         Grid(x, y, z, n_particles)
     {
         dim_cells = dim_cells_;
@@ -84,6 +85,13 @@ public:
     void fill();
     void move(double dispmax);
     void export_to_pdb(std::string fn);
+
+    std::vector<Particle> get_particles() const;
+    double distance(int id1, int id2) const;
+    Particle get_particle(uint id) const;
+    double density() const;
+    size_t n_particles() const;
+    double volume() const;
 };
 
 

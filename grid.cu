@@ -56,6 +56,44 @@ __host__ __device__ double calc_dist(Particle p1, Particle p2) {
     // return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
 }
 
+std::vector<Particle> Grid::get_particles() const {
+    return particles;
+}
+
+Particle Grid::get_particle(uint id) const {
+    for (auto p : particles) {
+        if (p.id == id) {
+            return p;
+        }
+    }
+    return Particle();
+}
+
+double Grid::volume() const {
+    return L.x * L.y * L.z;
+}
+
+size_t Grid::n_particles() const {
+    return particles.size();
+}
+
+double Grid::density() const {
+    return n_particles() / volume();
+}
+
+double Grid::distance(int id1, int id2) const {
+    auto x_dist = std::min(fabs(get_particle(id1).x - get_particle(id2).x),
+            L.x - fabs(get_particle(id1).x - get_particle(id2).x));
+
+    auto y_dist = std::min(fabs(get_particle(id1).y - get_particle(id2).y),
+            L.y - fabs(get_particle(id1).y - get_particle(id2).y));
+
+    auto z_dist = std::min(fabs(get_particle(id1).z - get_particle(id2).z),
+            L.z - fabs(get_particle(id1).z - get_particle(id2).z));
+
+    return sqrt(x_dist*x_dist + y_dist*y_dist + z_dist*z_dist);
+}
+
 template <typename T>
 D3<T> Grid::normalize(const D3<T> p) const {
     D3<double> new_p = p;
@@ -130,7 +168,7 @@ __global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
 
 void Grid::fill() {
     size_t count_tries = 0;
-    size_t max_tries = 10000 + n;
+    size_t max_tries = 10000 * n;
 
     double sigma = 1.0;
 
@@ -205,11 +243,6 @@ void Grid::fill() {
             if (intersected) break;
         }
 
-        if (intersected) {
-            fails++;
-            continue;
-        }
-
         if (!intersected) {
             particles.push_back(particle);
             auto cell_idx = cell_id(p_cell);
@@ -229,7 +262,7 @@ void Grid::fill() {
         count_tries++;
         cudaFree(cuda_particle);
     }
-    std::cout << "Fill complited with " << fails << " fails" << std::endl;
+    std::cout << "Tries: " << count_tries << std::endl;
 }
 
 // This is temporary function just to make it work. TODO: make up a better design

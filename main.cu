@@ -6,6 +6,7 @@
 #include "parse_config.cuh"
 #include "time_measurement.cuh"
 #include "grid.cuh"
+#include "utils.cuh"
 
 
 int main(int argc, char* argv[]) {
@@ -23,12 +24,18 @@ int main(int argc, char* argv[]) {
 
     auto conf = Config::from_map(config);
 
-    Grid grid(conf.Lx, conf.Ly, conf.Lz, conf.N);
+    Grid grid(conf.Lx, conf.Ly, conf.Lz, D3<uint>{10}, conf.N);
 
     auto start_fill = get_current_time_fenced();
     grid.fill();
     auto finish_fill = get_current_time_fenced();
     grid.export_to_pdb("fill.pdb");
+
+
+    std::cout << "--------- Radial distibution function ---------" << std::endl;
+    for (double r = 1; r < grid.get_Lx()/2; r+=0.1) {
+        std::cout << r << "\t:\t"<< rdf(r, 0.1, grid) << std::endl;
+    }
 
     //auto start2 = get_current_time_fenced();
     //double dispmax = 0.2;
