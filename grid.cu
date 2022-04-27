@@ -142,7 +142,7 @@ check_intersect (
         uint *cellStartIdx,
         uint curr_cell_id,
         const D3<double> *L,
-        bool *intersects) {
+        int *intersects) {
 
     uint startIdx = cellStartIdx[curr_cell_id];
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -157,9 +157,7 @@ check_intersect (
 
     auto dist = hypot(hypot(xd, yd), zd);
     if (dist < particle->sigma)
-        intersects[idx] = true;
-    else
-        intersects[idx] = false;
+        atomicAdd(intersects, 1);
 }
 
 __global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
@@ -171,8 +169,6 @@ void Grid::fill() {
     size_t max_tries = 10000 * n;
 
     double sigma = 1.0;
-
-    uint fails = 0;
 
     while ((particles.size() < n) && count_tries < max_tries) {
 
@@ -225,18 +221,16 @@ void Grid::fill() {
                     check_intersect<<<1, partInCell>>>( cuda_particle, cuda_ordered_particles,
                                                 cellStartIdx, curr_cell_id, cudaL, intersectsCuda );
 
-                    bool *intersects = new bool[partInCell];
-                    cudaMemcpy(intersects, intersectsCuda, partInCell*sizeof(bool),
+                    int *intersects = new int;
+                    cudaMemcpy(intersects, intersectsCuda, sizeof(int),
                                                             cudaMemcpyDeviceToHost);
 
-                    for (auto i = 0; i < partInCell; i++) {
-                        if (intersects[i]) {
-                            intersected = true;
-                            break;
-                        }
-                    }
-                    delete[] intersects;
+                    if (*intersects > 0)
+                        intersected = true;
 
+                    cudaMemset(intersectsCuda, 0, sizeof(int));
+
+                    delete intersects;
                 }
                 if (intersected) break;
             }
@@ -264,49 +258,6 @@ void Grid::fill() {
         cudaFree(cuda_particle);
     }
     std::cout << "Tries: " << count_tries << std::endl;
-}
-
-// This is temporary function just to make it work. TODO: make up a better design
-__device__ double calc_dist(double x1, double y1, double z1, double x2, double y2, double z2) {
-    return sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2) + pow(z1 - z2, 2));
-}
-
-__global__ void parent_kernel(Particle *p1, Particle *p, D3<double> grid_size, bool *intersects) {
-    if (p1->id == p[threadIdx.x].id) {
-        intersects[threadIdx.x] = false;
-        return;
-    }
-
-    auto sigma = p1->sigma;
-
-    auto x1 = p1->x;
-    auto y1 = p1->y;
-    auto z1 = p1->z;
-
-    auto x2 = p[threadIdx.x].x;
-    auto y2 = p[threadIdx.x].y;
-    auto z2 = p[threadIdx.x].z;
-
-    if (x1 >= grid_size.x/2)
-        x1 -= grid_size.x;
-    if (x2 >= grid_size.x/2)
-        x2 -= grid_size.x;
-
-    if (y1 >= grid_size.y/2)
-        y1 -= grid_size.y;
-    if (y2 >= grid_size.y/2)
-        y2 -= grid_size.y;
-
-    if (z1 >= grid_size.z/2)
-        z1 -= grid_size.z;
-    if (z2 >= grid_size.z/2)
-        z2 -= grid_size.z;
-
-    if (calc_dist(x1, y1, z1, x2, y2, z2) <= sigma) {
-        intersects[threadIdx.x] = true;
-        return;
-    }
-    intersects[threadIdx.x] = false;
 }
 
 void Grid::move(double dispmax) {

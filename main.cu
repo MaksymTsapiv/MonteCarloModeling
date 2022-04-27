@@ -33,10 +33,10 @@ int main(int argc, char* argv[]) {
     grid.export_to_pdb("fill.pdb");
 
 
-    std::cout << "--------- Radial distibution function ---------" << std::endl;
-    for (double r = 1; r < grid.get_Lx()/2; r+=0.1) {
-        std::cout << r << "\t:\t"<< rdf(r, 0.1, grid) << std::endl;
-    }
+    //std::cout << "--------- Radial distibution function ---------" << std::endl;
+    //for (double r = 1; r < grid.get_Lx()/2; r+=0.1) {
+        //std::cout << r << "\t:\t"<< rdf(r, 0.1, grid) << std::endl;
+    //}
 
     //auto start2 = get_current_time_fenced();
     //double dispmax = 0.2;

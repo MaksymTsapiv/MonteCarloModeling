@@ -27,7 +27,7 @@ private:
     OrderedArray particles_ordered;
 
     // Helper boolean array, needed in kernel funciton during intersection check
-    bool *intersectsCuda;
+    int *intersectsCuda;
 
     uint *cellStartIdx;
     /********************************************************/
@@ -51,8 +51,8 @@ public:
         cudaMalloc(&cellStartIdx, sizeof(uint) * n_cells);
         cudaMemset(cellStartIdx, 0, sizeof(uint) * n_cells);
 
-        cudaMalloc(&intersectsCuda, n_particles*sizeof(bool));
-        cudaMemset(intersectsCuda, false, n_particles*sizeof(bool));
+        cudaMalloc(&intersectsCuda, sizeof(int));
+        cudaMemset(intersectsCuda, 0, sizeof(int));
     }
     ~Grid() {
         cudaFree(cudaL);
