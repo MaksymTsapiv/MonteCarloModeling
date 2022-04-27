@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <cmath>
 #include "parse_config.cuh"
 #include "time_measurement.cuh"
 #include "grid.cuh"
@@ -45,7 +46,7 @@ int main(int argc, char* argv[]) {
 
     //auto finish = get_current_time_fenced();
 
-    std::cout << "fill: " << to_us(finish_fill- start_fill)  << " us" << std::endl;
+    std::cout << "fill: " << to_s(finish_fill- start_fill) << " secs" << std::endl;
 
     return 0;
 }

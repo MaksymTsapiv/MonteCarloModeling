@@ -192,7 +192,7 @@ void Grid::fill() {
 
         bool intersected = false;
         // TODO: Is it alright and accounts everything, using periodic boundary conditions?
-        // TODO: reimplement loop using a more ellegant approach, because this is ugly
+        // TODO: reimplement loop using a more elegant approach, because this is ugly
         for (double z_off = -cell_size.z; z_off <= cell_size.z; z_off+=cell_size.z) {
             for (double y_off = -cell_size.y; y_off <= cell_size.y; y_off+=cell_size.y) {
                 for (double x_off = -cell_size.x; x_off <= cell_size.x; x_off+=cell_size.x) {
@@ -201,7 +201,7 @@ void Grid::fill() {
                     uint curr_cell_id = cell_id(curr_cell);
 
                     // number of particles in cell
-                    size_t partInCell = 0;
+                    size_t partInCell;
                     
                     // start index of cell in ordered array of particles
                     uint *csi_cci = new uint;
@@ -245,6 +245,7 @@ void Grid::fill() {
 
         if (!intersected) {
             particles.push_back(particle);
+            if (particles.size() % 1000 == 0) std::cout << "size = " << particles.size() << '\n';
             auto cell_idx = cell_id(p_cell);
 
             // Cell start index of particle's cell
@@ -309,8 +310,8 @@ __global__ void parent_kernel(Particle *p1, Particle *p, D3<double> grid_size, b
 }
 
 void Grid::move(double dispmax) {
-    size_t count = 0;
-    double sigma = 1.0;
+//    size_t count = 0;
+//    double sigma = 1.0;
 
     for (auto & particle : particles) {
         double new_x = particle.x + random_double(-1, 1);
