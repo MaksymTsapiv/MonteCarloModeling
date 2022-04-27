@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
 
     auto conf = Config::from_map(config);
 
-    Grid grid(conf.Lx, conf.Ly, conf.Lz, D3<uint>{10}, conf.N);
+    Grid grid(conf.Lx, conf.Ly, conf.Lz, D3<uint>{conf.N_cells}, conf.N);
 
     auto start_fill = get_current_time_fenced();
     grid.fill();
