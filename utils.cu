@@ -30,7 +30,7 @@ std::vector<double> compute_rdf(const Grid &grid, double dr, double rmax) {
             double r = pbs_distance(particles[i].get_coord(), particles[j].get_coord(), grid_size);
             int k = floor(r/dr);
 
-            if (k >= nk-1)
+            if (k >= nk)
                 continue;
 
             rdf[k]++;
