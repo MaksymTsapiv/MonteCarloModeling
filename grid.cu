@@ -24,6 +24,10 @@ __host__ __device__ double Grid::get_Lz() const{
     return L.z;
 }
 
+__host__ __device__ D3<double> Grid::get_L() const {
+    return L;
+}
+
 void Grid::set_Lx(double x) {
     L.x = x;
 }

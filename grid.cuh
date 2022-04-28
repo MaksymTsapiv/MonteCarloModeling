@@ -67,6 +67,7 @@ public:
     }
     Grid operator=(const Grid &grid) = delete;
 
+    __host__ __device__ D3<double> get_L() const;
     __host__ __device__ double get_Lx() const;
     __host__ __device__ double get_Ly() const;
     __host__ __device__ double get_Lz() const;
