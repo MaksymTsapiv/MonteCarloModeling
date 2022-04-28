@@ -9,9 +9,9 @@ class Config {
 public:
     double Lx, Ly, Lz;
     size_t N;
+    uint N_cells;
 
     static Config from_map(std::map<std::string, double> &config);
-
 };
 
 #endif //PARSE_CONFIG_FILE_H
