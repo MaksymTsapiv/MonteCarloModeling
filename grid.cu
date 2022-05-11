@@ -10,6 +10,8 @@
 #include <cmath>
 #include <vector>
 #include <iostream>
+#include <algorithm>
+
 #include "grid.cuh"
 #include "particle.cuh"
 #include "time_measurement.cuh"
@@ -141,9 +143,6 @@ void Grid::fill() {
     long long fors_time = 0;
     long long add_time = 0;
 
-    long long add_time1 = 0;
-    long long add_time2 = 0;
-
     while ((particles.size() < n) && count_tries < max_tries) {
 
         double x = L.x * random_double(0, 1);
@@ -214,8 +213,6 @@ void Grid::fill() {
             partPerCell[cell_idx]++;
 
             auto add_end2 = get_current_time_fenced();
-            add_time2 += to_us(add_end2 - add_start2);
-
 
             // TODO: Variable block size
             if (static_cast<int>(n_cells-cell_idx-1) > 0)
@@ -231,9 +228,6 @@ void Grid::fill() {
 
     std::cout << "Fors time: " << fors_time << std::endl;
     std::cout << "Add time:  " << add_time << std::endl << std::endl;
-
-    std::cout << "Add time 1:  " << add_time1 << std::endl;
-    std::cout << "Add time 2:  " << add_time2 << std::endl;
 
     std::cout << std::endl;
 }
@@ -416,4 +410,44 @@ void Grid::export_to_pdb(std::string fn) {
                 focctemp(particle.sigma), temp_factor, "", "", "");
         serial_num++;
     }
+}
+
+/*
+ * Expects that constructor has already been called, number of cells per dimention and grid size
+ * are set
+ */
+void Grid::import_from_pdb(std::string fn) {
+    std::ifstream pdb_file(fn);
+    std::string line;
+    while (std::getline(pdb_file, line)) {
+        if (line.substr(0, 4) == "ATOM") {
+            std::string x_str = line.substr(30, 8);
+            std::string y_str = line.substr(38, 8);
+            std::string z_str = line.substr(46, 8);
+            std::string occ_str = line.substr(54, 6);
+
+            double x = std::stod(x_str);
+            double y = std::stod(y_str);
+            double z = std::stod(z_str);
+            double occ = std::stod(occ_str);
+
+            particles.push_back(Particle(x, y, z, occ));
+        }
+    }
+    pdb_file.close();
+
+    if (particles.size() > n)
+        throw std::invalid_argument("Too many particles in PDB file.\
+                Either grid is badly preconfigured or PDB file is corrupted.");
+
+    std::vector<Particle> sorted_particles;
+    sorted_particles.reserve(particles.size());
+    for (auto particle : particles)
+        sorted_particles.push_back(particle);
+
+    std::sort(sorted_particles.begin(), sorted_particles.end(), [](const Particle &a, const Particle &b) {
+        return a.x < b.x || (a.x == b.x && a.y < b.y) || (a.x == b.x && a.y == b.y && a.z < b.z);
+    });
+
+    particles_ordered.set_data(sorted_particles.data(), sorted_particles.size());
 }

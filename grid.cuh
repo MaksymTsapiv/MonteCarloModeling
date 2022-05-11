@@ -92,6 +92,7 @@ public:
     void fill();
     void move(double dispmax);
     void export_to_pdb(std::string fn);
+    void import_from_pdb(std::string fn);
 
     std::vector<Particle> get_particles() const;
     double distance(int id1, int id2) const;

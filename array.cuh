@@ -22,6 +22,8 @@ public:
 
     const Particle* get_array();
     size_t getSize() const;
+
+    void set_data(Particle* data, size_t size);
 };
 
 #endif //MODEL_ARRAY_CUH

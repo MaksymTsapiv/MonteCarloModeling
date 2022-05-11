@@ -62,3 +62,15 @@ const Particle *OrderedArray::get_array() {
 size_t OrderedArray::getSize() const {
     return size;
 }
+
+void OrderedArray::set_data(Particle *data, size_t size) {
+    if (size > capacity) {
+        throw std::runtime_error("Something went wrong when setting OrderedArray on GPU:\
+                size of Particle array is greater than capacity.");
+    }
+    cudaFree(this->data);
+    cudaMalloc(&this->data, sizeof(Particle) * capacity);
+    cudaMemcpy(this->data, data, sizeof(Particle) * size, cudaMemcpyHostToDevice);
+
+    this->size = size;
+}
