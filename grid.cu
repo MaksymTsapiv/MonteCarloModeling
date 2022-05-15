@@ -233,17 +233,20 @@ void Grid::fill() {
 }
 
 void Grid::move(double dispmax) {
-//    size_t count = 0;
-//    double sigma = 1.0;
+    size_t count_tries = 0;
+    size_t max_tries = 10000 * n;
 
-    for (auto & particle : particles) {
-        double new_x = particle.x + random_double(-1, 1);
-        double new_y = particle.y + random_double(-1, 1);
-        double new_z = particle.z + random_double(-1, 1);
+    double sigma = 1.0;
 
-        double vec_x = new_x - particle.x;
-        double vec_y = new_y - particle.y;
-        double vec_z = new_z - particle.z;
+//    while ((particles.size() < n) && count_tries < max_tries) {
+    for (size_t i = 0; (i < particles.size() && count_tries < max_tries); i++, count_tries++) {
+        double new_x = particles[i].x + random_double(-1, 1);
+        double new_y = particles[i].y + random_double(-1, 1);
+        double new_z = particles[i].z + random_double(-1, 1);
+
+        double vec_x = new_x - particles[i].x;
+        double vec_y = new_y - particles[i].y;
+        double vec_z = new_z - particles[i].z;
 
         double vec_length = sqrt(pow(vec_x, 2) + pow(vec_y, 2) + pow(vec_z, 2));
 
@@ -251,39 +254,72 @@ void Grid::move(double dispmax) {
         vec_y = vec_y / vec_length;
         vec_z = vec_z / vec_length;
 
-        double x = particle.x + vec_x * dispmax;
-        double y = particle.y + vec_y * dispmax;
-        double z = particle.z + vec_z * dispmax;
+        double x = particles[i].x + vec_x * dispmax;
+        double y = particles[i].y + vec_y * dispmax;
+        double z = particles[i].z + vec_z * dispmax;
 
-        if (x >= L.x) x -= L.x;
-        if (y >= L.y) y -= L.y;
-        if (z >= L.z) z -= L.z;
+        Particle particle = Particle(x, y, z, sigma);
 
-        if (x < 0) x += L.x;
-        if (y < 0) y += L.y;
-        if (z < 0) z += L.z;
+        Particle *cuda_particle;
+        cudaMalloc(&cuda_particle, sizeof(Particle));
+        cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
 
-        // TODO: implement
-        // PROBLEM: with this approach we will have to iterate through the array of bools to
-        //    check if any thread of kernel function returned true
-        // Calculate <new_particle_coord_cell_id> -- cell id of the new particle position
-        for (int z = -1; z <= 1; z++)
-            for (int y = -1; y <= 1; y++)
-                for (int x = -1; x <= 1; x++) {
-                    // Get current cell id <curr_cell_id>, relative to <new_particle_coord_cell_id>
-                    // Parallel check for intersect in <curr_cell_id>, passing <ordered_array>,
-                    //    start index and end index for the <ordered_array> for current cell
-                    
-                    // Kernel function saves result in array of bools <intersects>
-                    // Check the array <intersects>
+        D3<double> p_point = particle.get_coord();
+        D3<int> p_cell = get_cell(p_point);
+        bool intersected = false;
+
+        for (auto z_off = -1; z_off <= 1; ++z_off) {
+            for (auto y_off = -1; y_off <= 1; ++y_off) {
+                for (auto x_off = -1; x_off <= 1; ++x_off) {
+                    D3<int> offset = {x_off, y_off, z_off};
+                    uint curr_cell_id = cell_id(p_cell + offset);
+
+                    // number of particles in cell
+                    size_t partInCell = partPerCell[curr_cell_id];
+
+                    if (partInCell == 0)
+                        continue;
+
+                    const Particle *cuda_ordered_particles = particles_ordered.get_array();
+                    // TODO: Variable block size
+                    check_intersect<<<1, partInCell>>>(cuda_particle, cuda_ordered_particles,
+                                                       cellStartIdx, curr_cell_id, cudaL, intersectsCuda);
+
+                    int *intersects = new int;
+                    cudaMemcpy(intersects, intersectsCuda, sizeof(int),
+                               cudaMemcpyDeviceToHost);
+
+                    if (*intersects > 0)
+                        intersected = true;
+
+                    cudaMemset(intersectsCuda, 0, sizeof(int));
+
+                    delete intersects;
                 }
-
-        bool not_intersected = true;
-        if (not_intersected) {
-            particle.x = x;
-            particle.y = y;
-            particle.z = z;
+                if (intersected) break;
+            }
+            if (intersected) break;
         }
+
+        if (!intersected) {
+            particles[i] = particle;
+            auto cell_idx = cell_id(p_cell);
+
+            // Cell start index in ordered array for the current particle (which is inserted)
+            uint *partCellStartIdx = new uint;
+            cudaMemcpy(partCellStartIdx, &cellStartIdx[cell_idx], sizeof(uint),
+                       cudaMemcpyDeviceToHost);
+
+            particles_ordered.insert(particle, *partCellStartIdx);
+            partPerCell[cell_idx]++;
+
+            // TODO: Variable block size
+            if (static_cast<int>(n_cells - cell_idx - 1) > 0)
+                update_kernel<<<1, n_cells - cell_idx - 1>>>(cellStartIdx, cell_idx + 1);
+        }
+
+        count_tries++;
+        cudaFree(cuda_particle);
     }
 }
 

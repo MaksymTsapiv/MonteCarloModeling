@@ -7,7 +7,7 @@ std::map<std::string, double> parse_conf(std::ifstream &file);
 
 class Config {
 public:
-    double Lx, Ly, Lz;
+    double Lx, Ly, Lz, dispmax;
     size_t N;
     uint N_cells;
 
