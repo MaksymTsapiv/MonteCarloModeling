@@ -4,7 +4,7 @@ set(PROJECT_NAME model)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(${PROJECT_NAME} LANGUAGES CXX CUDA)
+project(${PROJECT_NAME} LANGUAGES CUDA)
 
 enable_language(CUDA)
 
@@ -50,6 +50,10 @@ set_target_properties( ${PROJECT_NAME}
 INSTALL(PROGRAMS
 		$<TARGET_FILE:${PROJECT_NAME}>	# ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}
 		DESTINATION bin)
+
+if (I_USE_ARCH_BTW)
+	target_include_directories(${PROJECT_NAME} PUBLIC /usr/lib/gcc/x86_64-pc-linux-gnu/11.3.0/include/c++)
+endif ()
 
 # Define ALL_TARGETS variable to use in PVS and Sanitizers
 #set(ALL_TARGETS ${PROJECT_NAME})
