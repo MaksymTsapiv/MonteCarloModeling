@@ -19,6 +19,7 @@ public:
 
     int insert(Particle value, size_t index);
     int remove(size_t index);
+    int remove_by_id(size_t id);
 
     const Particle* get_array();
     size_t getSize() const;
