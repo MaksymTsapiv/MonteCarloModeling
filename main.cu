@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
     auto start_move = get_current_time_fenced();
     grid.move(conf.dispmax);
     auto finish_move = get_current_time_fenced();
-    grid.export_to_pdb("fill.pdb");
+    grid.export_to_pdb("move.pdb");
 
     std::cout << "--------- Radial distibution function ---------" << std::endl;
     std::vector<double> rdf_vals;
@@ -47,20 +47,12 @@ int main(int argc, char* argv[]) {
 
     save_rdf_to_file(rdf, dr, rmax, "rdf.dat");
 
-//    for (auto rdf_current : rdf) {
-//        std::cout << rdf_current << std::endl;
-//    }
+    for (auto rdf_current : rdf) {
+        std::cout << rdf_current << std::endl;
+    }
 
 
-    //auto start2 = get_current_time_fenced();
-    //double dispmax = 0.2;
-    //grid.move(dispmax);
-    //grid.export_to_pdb("move.pdb");
-
-
-    //auto finish = get_current_time_fenced();
-
-    std::cout << "fill: " << to_s(finish_fill - start_fill) << " secs\n" << "move: " << to_s(finish_move - start_move) << "secs" << std::endl;
+    std::cout << "fill: " << to_us(finish_fill - start_fill) << " us\n" << "move: " << to_us(finish_move - start_move) << " us" << std::endl;
 
     return 0;
 }

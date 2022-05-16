@@ -232,14 +232,54 @@ void Grid::fill() {
     std::cout << std::endl;
 }
 
+__global__ void
+check_intersect_move (
+        const Particle *particle,
+        const Particle *ordered_particles,
+        const uint *cellStartIdx,
+        uint curr_cell_id,
+        const D3<double> *L,
+        int *intersects,
+        uint curr_part_id) {
+
+    uint startIdx = cellStartIdx[curr_cell_id];
+    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (curr_part_id == ordered_particles[startIdx+idx].id)
+        return;
+
+    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
+                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
+
+    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
+                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
+
+    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
+                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
+
+    auto dist = hypot(hypot(xd, yd), zd);
+    if (dist < particle->sigma)
+        atomicAdd(intersects, 1);
+}
+
+__global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id) {
+    cellStartIdx[new_cell_id+1 + threadIdx.x]++;
+}
+
+__global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id) {
+    cellStartIdx[init_cell_id+1 + threadIdx.x]--;
+}
+
 void Grid::move(double dispmax) {
-    size_t count_tries = 0;
-    size_t max_tries = 10000 * n;
-
     double sigma = 1.0;
+    uint success = 0;
 
-//    while ((particles.size() < n) && count_tries < max_tries) {
-    for (size_t i = 0; (i < particles.size() && count_tries < max_tries); i++, count_tries++) {
+    for (size_t i = 0; i < particles.size(); i++) {
+        auto curr_part_id = particles[i].id;
+
+        D3<int> init_p_cell = get_cell(particles[i].get_coord());
+        size_t init_p_cell_id = cell_id(init_p_cell);
+
         double new_x = particles[i].x + random_double(-1, 1);
         double new_y = particles[i].y + random_double(-1, 1);
         double new_z = particles[i].z + random_double(-1, 1);
@@ -266,6 +306,8 @@ void Grid::move(double dispmax) {
 
         D3<double> p_point = particle.get_coord();
         D3<int> p_cell = get_cell(p_point);
+        size_t new_p_cell_id = cell_id(p_cell);
+
         bool intersected = false;
 
         for (auto z_off = -1; z_off <= 1; ++z_off) {
@@ -282,8 +324,9 @@ void Grid::move(double dispmax) {
 
                     const Particle *cuda_ordered_particles = particles_ordered.get_array();
                     // TODO: Variable block size
-                    check_intersect<<<1, partInCell>>>(cuda_particle, cuda_ordered_particles,
-                                                       cellStartIdx, curr_cell_id, cudaL, intersectsCuda);
+                    check_intersect_move<<<1, partInCell>>>(cuda_particle, cuda_ordered_particles,
+                                                       cellStartIdx, curr_cell_id, cudaL,
+						       intersectsCuda, curr_part_id);
 
                     int *intersects = new int;
                     cudaMemcpy(intersects, intersectsCuda, sizeof(int),
@@ -307,20 +350,32 @@ void Grid::move(double dispmax) {
 
             // Cell start index in ordered array for the current particle (which is inserted)
             uint *partCellStartIdx = new uint;
-            cudaMemcpy(partCellStartIdx, &cellStartIdx[cell_idx], sizeof(uint),
+            cudaMemcpy(partCellStartIdx, &cellStartIdx[new_p_cell_id], sizeof(uint),
                        cudaMemcpyDeviceToHost);
 
-            particles_ordered.insert(particle, *partCellStartIdx);
-            partPerCell[cell_idx]++;
+            partPerCell[new_p_cell_id]++;
+            partPerCell[init_p_cell_id]--;
 
-            // TODO: Variable block size
-            if (static_cast<int>(n_cells - cell_idx - 1) > 0)
-                update_kernel<<<1, n_cells - cell_idx - 1>>>(cellStartIdx, cell_idx + 1);
+            particles_ordered.remove_by_id(particles[i].id);
+            particles_ordered.insert(particle, *partCellStartIdx);
+
+            uint cells_in_range = init_p_cell_id > new_p_cell_id ?
+                        init_p_cell_id - new_p_cell_id : new_p_cell_id - init_p_cell_id;
+
+            if (init_p_cell_id > new_p_cell_id) {
+                // TODO: Variable block size
+                backward_move_kernel<<<1, cells_in_range>>>(cellStartIdx, new_p_cell_id);
+            }
+            else if (init_p_cell_id < new_p_cell_id) {
+                // TODO: Variable block size
+                forward_move_kernel<<<1, cells_in_range>>>(cellStartIdx, init_p_cell_id);
+            }
+            success++;
         }
 
-        count_tries++;
         cudaFree(cuda_particle);
     }
+    std::cout << success << " moved" << std::endl;
 }
 
 enum paramsMLen{
