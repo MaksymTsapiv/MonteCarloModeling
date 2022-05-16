@@ -345,7 +345,9 @@ void Grid::move(double dispmax) {
         }
 
         if (!intersected) {
-            particles[i] = particle;
+            particles[i].x = particle.x;
+            particles[i].y = particle.y;
+            particles[i].z = particle.z;
             auto cell_idx = cell_id(p_cell);
 
             // Cell start index in ordered array for the current particle (which is inserted)
@@ -356,8 +358,17 @@ void Grid::move(double dispmax) {
             partPerCell[new_p_cell_id]++;
             partPerCell[init_p_cell_id]--;
 
-            particles_ordered.remove_by_id(particles[i].id);
-            particles_ordered.insert(particle, *partCellStartIdx);
+            std::cout << particles[i].id << std::endl;
+            int remove_status = particles_ordered.remove_by_id(particles[i].id);
+            if (remove_status)
+                throw std::runtime_error("Error in remove");
+            else {
+                std::cout << "removed" << std::endl;
+            }
+
+            int insert_status = particles_ordered.insert(particle, *partCellStartIdx);
+            if (insert_status)
+                throw std::runtime_error("Error in insert");
 
             uint cells_in_range = init_p_cell_id > new_p_cell_id ?
                         init_p_cell_id - new_p_cell_id : new_p_cell_id - init_p_cell_id;
