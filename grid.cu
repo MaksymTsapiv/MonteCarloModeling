@@ -135,9 +135,36 @@ __global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
     cellStartIdx[cell_idx+threadIdx.x]++;
 }
 
+int check_intersect_cpu(Particle particle, std::vector<Particle> particles, D3<double> L) {
+    int intersects = 0;
+    for (Particle p : particles) {
+
+        //auto xd = fabs(particle.x - p.x);
+        //auto yd = fabs(particle.y - p.y);
+        //auto zd = fabs(particle.z - p.z);
+
+
+        auto xd = fabs(particle.x - p.x) < L.x - fabs(particle.x - p.x) ?
+                        fabs(particle.x - p.x) : L.x - fabs(particle.x - p.x);
+
+        auto yd = fabs(particle.y - p.y) < L.y - fabs(particle.y - p.y) ?
+                        fabs(particle.y - p.y) : L.y - fabs(particle.y - p.y);
+
+        auto zd = fabs(particle.z - p.z) < L.z - fabs(particle.z - p.z) ?
+                        fabs(particle.z - p.z) : L.z - fabs(particle.z - p.z);
+
+        double dist = hypot(hypot(xd, yd), zd);
+        if (dist < particle.sigma)
+            intersects++;
+    }
+    return intersects;
+}
+
 void Grid::fill() {
     size_t count_tries = 0;
     size_t max_tries = 10000 * n;
+
+    uint int_cnt = 0;
 
     double sigma = 1.0;
 
@@ -199,6 +226,12 @@ void Grid::fill() {
 
         auto add_start = get_current_time_fenced();
         if (!intersected) {
+            auto intersects_loc = check_intersect_cpu(particle, particles, L);
+            if (intersects_loc > 0) {
+                int_cnt++;
+                std::cout << "Intersected anyway: " << intersects_loc << std::endl;
+            }
+
             particles.push_back(particle);
             if (particles.size() % 1000 == 0) std::cout << "size = " << particles.size() << '\n';
             auto cell_idx = cell_id(p_cell);
@@ -226,6 +259,7 @@ void Grid::fill() {
         cudaFree(cuda_particle);
     }
     std::cout << "Tries: " << count_tries << std::endl;
+    std::cout << "Intersected: " << int_cnt << std::endl;
 
     std::cout << "Fors time: " << fors_time << std::endl;
     std::cout << "Add time:  " << add_time << std::endl << std::endl;
