@@ -47,9 +47,9 @@ int main(int argc, char* argv[]) {
 
     save_rdf_to_file(rdf, dr, rmax, "rdf.dat");
 
-    for (auto rdf_current : rdf) {
-        std::cout << rdf_current << std::endl;
-    }
+    //for (auto rdf_current : rdf) {
+        //std::cout << rdf_current << std::endl;
+    //}
 
 
     std::cout << "fill: " << to_us(finish_fill - start_fill) << " us\n" << "move: " << to_us(finish_move - start_move) << " us" << std::endl;

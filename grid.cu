@@ -270,6 +270,12 @@ __global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id) {
     cellStartIdx[init_cell_id+1 + threadIdx.x]--;
 }
 
+__global__ void print_particles_kernel(Particle *particles, size_t n) {
+    for (size_t i = 0; i < n; i++)
+        printf("%lu ", particles[i].id);
+    printf("\n");
+}
+
 void Grid::move(double dispmax) {
     double sigma = 1.0;
     uint success = 0;
@@ -358,15 +364,13 @@ void Grid::move(double dispmax) {
             partPerCell[new_p_cell_id]++;
             partPerCell[init_p_cell_id]--;
 
-            std::cout << particles[i].id << std::endl;
+            Particle curr_particle = std::move(particles[i]);
+
             int remove_status = particles_ordered.remove_by_id(particles[i].id);
             if (remove_status)
                 throw std::runtime_error("Error in remove");
-            else {
-                std::cout << "removed" << std::endl;
-            }
 
-            int insert_status = particles_ordered.insert(particle, *partCellStartIdx);
+            int insert_status = particles_ordered.insert(curr_particle, *partCellStartIdx);
             if (insert_status)
                 throw std::runtime_error("Error in insert");
 
