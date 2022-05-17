@@ -358,13 +358,10 @@ void Grid::move(double dispmax) {
             partPerCell[new_p_cell_id]++;
             partPerCell[init_p_cell_id]--;
 
-            std::cout << particles[i].id << std::endl;
+            std::cout << "id: " << particles[i].id << std::endl;
             int remove_status = particles_ordered.remove_by_id(particles[i].id);
             if (remove_status)
                 throw std::runtime_error("Error in remove");
-            else {
-                std::cout << "removed" << std::endl;
-            }
 
             int insert_status = particles_ordered.insert(particle, *partCellStartIdx);
             if (insert_status)
