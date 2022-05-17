@@ -25,7 +25,7 @@ OrderedArray::~OrderedArray() {
 __global__ void get_particle_index_kernel(
                 Particle *particles, size_t particle_id, uint *index, size_t size)
 {
-    int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
     if (threadId >= size)
         return;
 
@@ -38,7 +38,7 @@ int OrderedArray::remove_by_id(size_t id) {
     cudaMalloc(&cudaIndex, sizeof(uint));
 
     int threadsPerBlock = 256;
-    int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
+    size_t blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
     get_particle_index_kernel<<<blocksPerGrid, threadsPerBlock>>>(data, id, cudaIndex, size);
 
     uint *index = new uint;

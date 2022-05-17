@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <random>
 #include <cmath>
+#include <utility>
 #include <vector>
 #include <iostream>
 #include <algorithm>
@@ -274,19 +275,19 @@ void Grid::move(double dispmax) {
     double sigma = 1.0;
     uint success = 0;
 
-    for (size_t i = 0; i < particles.size(); i++) {
-        auto curr_part_id = particles[i].id;
+    for (auto & i : particles) {
+        auto curr_part_id = i.id;
 
-        D3<int> init_p_cell = get_cell(particles[i].get_coord());
+        D3<int> init_p_cell = get_cell(i.get_coord());
         size_t init_p_cell_id = cell_id(init_p_cell);
 
-        double new_x = particles[i].x + random_double(-1, 1);
-        double new_y = particles[i].y + random_double(-1, 1);
-        double new_z = particles[i].z + random_double(-1, 1);
+        double new_x = i.x + random_double(-1, 1);
+        double new_y = i.y + random_double(-1, 1);
+        double new_z = i.z + random_double(-1, 1);
 
-        double vec_x = new_x - particles[i].x;
-        double vec_y = new_y - particles[i].y;
-        double vec_z = new_z - particles[i].z;
+        double vec_x = new_x - i.x;
+        double vec_y = new_y - i.y;
+        double vec_z = new_z - i.z;
 
         double vec_length = sqrt(pow(vec_x, 2) + pow(vec_y, 2) + pow(vec_z, 2));
 
@@ -294,9 +295,9 @@ void Grid::move(double dispmax) {
         vec_y = vec_y / vec_length;
         vec_z = vec_z / vec_length;
 
-        double x = particles[i].x + vec_x * dispmax;
-        double y = particles[i].y + vec_y * dispmax;
-        double z = particles[i].z + vec_z * dispmax;
+        double x = i.x + vec_x * dispmax;
+        double y = i.y + vec_y * dispmax;
+        double z = i.z + vec_z * dispmax;
 
         Particle particle = Particle(x, y, z, sigma);
 
@@ -345,10 +346,10 @@ void Grid::move(double dispmax) {
         }
 
         if (!intersected) {
-            particles[i].x = particle.x;
-            particles[i].y = particle.y;
-            particles[i].z = particle.z;
-            auto cell_idx = cell_id(p_cell);
+            i.x = particle.x;
+            i.y = particle.y;
+            i.z = particle.z;
+//            auto cell_idx = cell_id(p_cell);
 
             // Cell start index in ordered array for the current particle (which is inserted)
             uint *partCellStartIdx = new uint;
@@ -358,8 +359,8 @@ void Grid::move(double dispmax) {
             partPerCell[new_p_cell_id]++;
             partPerCell[init_p_cell_id]--;
 
-            std::cout << "id: " << particles[i].id << std::endl;
-            int remove_status = particles_ordered.remove_by_id(particles[i].id);
+            std::cout << "id: " << i.id << std::endl;
+            int remove_status = particles_ordered.remove_by_id(i.id);
             if (remove_status)
                 throw std::runtime_error("Error in remove");
 
@@ -445,11 +446,11 @@ static std::string check_fill (std::string val, size_t len, direction align) {
 
 static std::string
 check_fill(std::string val, int len) {
-    return check_fill(val, len, left);
+    return check_fill(std::move(val), len, left);
 }
 
 static void
-export_to_pdb ( std::string fn,             // output filename with extension
+export_to_pdb ( const std::string& fn,             // output filename with extension
                 std::string type,           // 1-6
                 std::string sn,             // 7-11  right
                 std::string name,           // 13-16
@@ -492,7 +493,7 @@ export_to_pdb ( std::string fn,             // output filename with extension
     pdb_file.close();
 }
 
-void Grid::export_to_pdb(std::string fn) {
+void Grid::export_to_pdb(const std::string& fn) {
     remove(fn.data());
     unsigned serial_num = 1;
     for (auto particle : particles) {
@@ -530,7 +531,7 @@ void Grid::import_from_pdb(std::string fn) {
             double z = std::stod(z_str);
             double occ = std::stod(occ_str);
 
-            particles.push_back(Particle(x, y, z, occ));
+            particles.emplace_back(x, y, z, occ);
         }
     }
     pdb_file.close();
