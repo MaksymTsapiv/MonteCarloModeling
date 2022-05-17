@@ -11,10 +11,10 @@ class OrderedArray {
 private:
     size_t size;
     size_t capacity;
-    Particle* data;
+    Particle* data{};
 
 public:
-    OrderedArray(size_t capacity);
+    explicit OrderedArray(size_t capacity);
     ~OrderedArray();
 
     int insert(Particle value, size_t index);

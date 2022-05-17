@@ -271,6 +271,12 @@ __global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id) {
     cellStartIdx[init_cell_id+1 + threadIdx.x]--;
 }
 
+__global__ void print_particles_kernel(Particle *particles, size_t n) {
+    for (size_t i = 0; i < n; i++)
+        printf("%lu ", particles[i].id);
+    printf("\n");
+}
+
 void Grid::move(double dispmax) {
     double sigma = 1.0;
     uint success = 0;
@@ -359,12 +365,13 @@ void Grid::move(double dispmax) {
             partPerCell[new_p_cell_id]++;
             partPerCell[init_p_cell_id]--;
 
-            std::cout << "id: " << i.id << std::endl;
+
+            Particle curr_particle = i;
             int remove_status = particles_ordered.remove_by_id(i.id);
             if (remove_status)
                 throw std::runtime_error("Error in remove");
 
-            int insert_status = particles_ordered.insert(particle, *partCellStartIdx);
+            int insert_status = particles_ordered.insert(curr_particle, *partCellStartIdx);
             if (insert_status)
                 throw std::runtime_error("Error in insert");
 
@@ -516,7 +523,7 @@ void Grid::export_to_pdb(const std::string& fn) {
  * Expects that constructor has already been called, number of cells per dimention and grid size
  * are set
  */
-void Grid::import_from_pdb(std::string fn) {
+void Grid::import_from_pdb(const std::string& fn) {
     std::ifstream pdb_file(fn);
     std::string line;
     while (std::getline(pdb_file, line)) {
