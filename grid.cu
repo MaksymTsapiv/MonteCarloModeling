@@ -115,6 +115,9 @@ check_intersect (
         const D3<double> *L,
         int *intersects) {
 
+    //__shared__ uint* intersects_shared;
+
+
     uint startIdx = cellStartIdx[curr_cell_id];
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
     auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
@@ -126,9 +129,33 @@ check_intersect (
     auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
                         L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
 
+    //printf("x: min(%f\t%f) \t = \t %f\ny: min(%f\t%f) \t = \t %f\nz: min(%f\t%f) \t = \t %f\n\n", fabs(particle->x - ordered_particles[startIdx+idx].x), L->x - fabs(particle->x - ordered_particles[startIdx+idx].x), xd, fabs(particle->y - ordered_particles[startIdx+idx].y), L->y - fabs(particle->y - ordered_particles[startIdx+idx].y), yd, fabs(particle->z - ordered_particles[startIdx+idx].z), L->z - fabs(particle->z - ordered_particles[startIdx+idx].z), zd);
+
     auto dist = hypot(hypot(xd, yd), zd);
     if (dist < particle->sigma)
         atomicAdd(intersects, 1);
+}
+
+std::vector<size_t> Grid::check_intersect_cpu_single(Particle particle, std::vector<Particle> particles, D3<double> L, uint req_cell_id) {
+    std::vector<size_t> res;
+    for (Particle p: particles) {
+        auto xd = fabs(particle.x - p.x) < L.x - fabs(particle.x - p.x) ?
+                        fabs(particle.x - p.x) : L.x - fabs(particle.x - p.x);
+
+        auto yd = fabs(particle.y - p.y) < L.y - fabs(particle.y - p.y) ?
+                        fabs(particle.y - p.y) : L.y - fabs(particle.y - p.y);
+
+        auto zd = fabs(particle.z - p.z) < L.z - fabs(particle.z - p.z) ?
+                        fabs(particle.z - p.z) : L.z - fabs(particle.z - p.z);
+
+        double dist = hypot(hypot(xd, yd), zd);
+        auto this_cell_id = cell_id(get_cell(p.get_coord()));
+        if (dist < particle.sigma && this_cell_id == req_cell_id) {
+            std::cout << particle.id << " intersected with " << p.id << std::endl;
+            res.push_back(p.id);
+        }
+    }
+    return res;
 }
 
 __global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
@@ -206,6 +233,8 @@ void Grid::fill() {
                     check_intersect<<<1, partInCell>>>( cuda_particle, cuda_ordered_particles,
                                                 cellStartIdx, curr_cell_id, cudaL, intersectsCuda );
 
+                    auto intersected_cpu = check_intersect_cpu_single(particle, particles, L, curr_cell_id);
+
                     int *intersects = new int;
                     cudaMemcpy(intersects, intersectsCuda, sizeof(int),
                                                             cudaMemcpyDeviceToHost);
@@ -213,8 +242,14 @@ void Grid::fill() {
                     if (*intersects > 0)
                         intersected = true;
 
-                    cudaMemset(intersectsCuda, 0, sizeof(int));
+                    if (intersected_cpu.size() && !intersected) {
+                        std::cout << particle.id << ": ";
+                        for (auto pid : intersected_cpu) {
+                            std::cout << pid << " ";
+                        }
+                    }
 
+                    cudaMemset(intersectsCuda, 0, sizeof(int));
                     delete intersects;
                 }
                 if (intersected) break;

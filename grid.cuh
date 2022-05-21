@@ -86,6 +86,9 @@ public:
     template <typename T>
     size_t cell_id(D3<T> p) const;
 
+
+    std::vector<size_t> check_intersect_cpu_single(Particle particle, std::vector<Particle> particles, D3<double> L, uint cell_id);
+
     template <typename T>
     uint cell_at_offset(D3<uint> init_cell, D3<T> offset) const;
 

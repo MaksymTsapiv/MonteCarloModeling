@@ -10,6 +10,10 @@
 #include "utils.cuh"
 
 
+//__global__ void check_intersect_global(Particle *particle, Particle *particles) {
+
+//}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cout << "Wrong arguments!" << std::endl;
@@ -40,10 +44,10 @@ int main(int argc, char* argv[]) {
     save_rdf_to_file(rdf1, dr, rmax, "rdf_fill.dat");
 
 
-    //auto start_move = get_current_time_fenced();
-    //grid.move(conf.dispmax);
-    //auto finish_move = get_current_time_fenced();
-    //grid.export_to_pdb("move.pdb");
+    auto start_move = get_current_time_fenced();
+    grid.move(conf.dispmax);
+    auto finish_move = get_current_time_fenced();
+    grid.export_to_pdb("move.pdb");
 
     //auto rdf2 = compute_rdf(grid, dr, rmax);
     //save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
