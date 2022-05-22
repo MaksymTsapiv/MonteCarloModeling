@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
     Grid grid(conf.Lx, conf.Ly, conf.Lz, D3<uint>{conf.N_cells}, conf.N);
 
     const double dr = 0.1;
-    const double rmax = grid.get_Lx() / 2;
+    const double rmax = grid.L.x / 2;
 
 
     auto start_fill = get_current_time_fenced();
@@ -49,8 +49,8 @@ int main(int argc, char* argv[]) {
     auto finish_move = get_current_time_fenced();
     grid.export_to_pdb("move.pdb");
 
-    //auto rdf2 = compute_rdf(grid, dr, rmax);
-    //save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
+    auto rdf2 = compute_rdf(grid, dr, rmax);
+    save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
 
 
     //std::cout << "--------- Radial distibution function ---------" << std::endl;
@@ -60,8 +60,8 @@ int main(int argc, char* argv[]) {
 
 
     std::cout << "fill: " << to_us(finish_fill - start_fill) << " us\n"
-            //<< "move: " << to_us(finish_move - start_move) << " us"
-        << std::endl;
+              << "move: " << to_us(finish_move - start_move) << " us"
+              << std::endl;
 
     return 0;
 }

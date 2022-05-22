@@ -17,30 +17,6 @@
 #include "particle.cuh"
 #include "time_measurement.cuh"
 
-__host__ __device__ double Grid::get_Lx() const{
-    return L.x;
-}
-__host__ __device__ double Grid::get_Ly() const{
-    return L.y;
-}
-__host__ __device__ double Grid::get_Lz() const{
-    return L.z;
-}
-
-__host__ __device__ D3<double> Grid::get_L() const {
-    return L;
-}
-
-void Grid::set_Lx(double x) {
-    L.x = x;
-}
-void Grid::set_Ly(double y) {
-    L.y = y;
-}
-void Grid::set_Lz(double z) {
-    L.z = z;
-}
-
 double random_double(double from, double to) {
     //std::random_device rd;
     //static std::mt19937 rand_double(rd());
@@ -51,30 +27,8 @@ double random_double(double from, double to) {
     return dist(rand_double);
 }
 
-
-__host__ __device__ double calc_dist(Particle p1, Particle p2) {
-    double x1 = p1.x;
-    double x2 = p2.x;
-    double y1 = p1.y;
-    double y2 = p2.y;
-    double z1 = p1.z;
-    double z2 = p2.z;
-
-    return hypot(hypot(x1 - x2, y1 - y2), z1 - z2);
-    // return sqrt(pow(sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2)), 2), pow((z1 -z2), 2));
-}
-
 std::vector<Particle> Grid::get_particles() const {
     return particles;
-}
-
-Particle Grid::get_particle(uint id) const {
-    for (auto p : particles) {
-        if (p.id == id) {
-            return p;
-        }
-    }
-    return {};
 }
 
 double Grid::volume() const {
@@ -89,23 +43,51 @@ double Grid::density() const {
     return n_particles() / volume();
 }
 
-double Grid::distance(int id1, int id2) const {
-    auto x_dist = std::min(fabs(get_particle(id1).x - get_particle(id2).x),
-            L.x - fabs(get_particle(id1).x - get_particle(id2).x));
+template <typename T>
+D3<T> Grid::normalize(const D3<T> p) const {
+    D3<double> new_p = p;
 
-    auto y_dist = std::min(fabs(get_particle(id1).y - get_particle(id2).y),
-            L.y - fabs(get_particle(id1).y - get_particle(id2).y));
+    if (p.x < 0)
+        new_p.x = p.x + L.x;
+    if (p.y < 0)
+        new_p.y = p.y + L.y;
+    if (p.z < 0)
+        new_p.z = p.z + L.z;
+    if (p.x >= L.x)
+        new_p.x = p.x - L.x;
+    if (p.y >= L.y)
+        new_p.y = p.y - L.y;
+    if (p.z >= L.z)
+        new_p.z = p.z - L.z;
 
-    auto z_dist = std::min(fabs(get_particle(id1).z - get_particle(id2).z),
-            L.z - fabs(get_particle(id1).z - get_particle(id2).z));
-
-    return sqrt(x_dist*x_dist + y_dist*y_dist + z_dist*z_dist);
+    return new_p;
 }
+
+template <typename T>
+D3<int> Grid::get_cell(D3<T> p) const {
+    D3<double> new_p = normalize<double>(p.toD3double());
+
+    int c_x = static_cast<int>(floor( (new_p.x / L.x) * dim_cells.x) );
+    int c_y = static_cast<int>(floor( (new_p.y / L.y) * dim_cells.y) );
+    int c_z = static_cast<int>(floor( (new_p.z / L.z) * dim_cells.z) );
+    D3<int> cell{c_x, c_y, c_z};
+    return cell;
+}
+
+template <typename T>
+size_t Grid::cell_id(D3<T> p) const {
+    D3<int> cell = get_cell(p);
+    return cell.x + cell.y * dim_cells.y + cell.z * dim_cells.z * dim_cells.z;
+}
+
 
 __device__ double device_min(double a, double b) {
     return a < b ? a : b;
 }
 
+/* TODO: Rewrite with __shared__ uint* array and using parallel summing (reduce) algorithm.
+ *  It should be faster like that then atomicAdd.
+ */
 __global__ void
 check_intersect (
         const Particle *particle,
@@ -114,9 +96,6 @@ check_intersect (
         uint curr_cell_id,
         const D3<double> *L,
         int *intersects) {
-
-    //__shared__ uint* intersects_shared;
-
 
     uint startIdx = cellStartIdx[curr_cell_id];
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -129,14 +108,48 @@ check_intersect (
     auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
                         L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
 
-    //printf("x: min(%f\t%f) \t = \t %f\ny: min(%f\t%f) \t = \t %f\nz: min(%f\t%f) \t = \t %f\n\n", fabs(particle->x - ordered_particles[startIdx+idx].x), L->x - fabs(particle->x - ordered_particles[startIdx+idx].x), xd, fabs(particle->y - ordered_particles[startIdx+idx].y), L->y - fabs(particle->y - ordered_particles[startIdx+idx].y), yd, fabs(particle->z - ordered_particles[startIdx+idx].z), L->z - fabs(particle->z - ordered_particles[startIdx+idx].z), zd);
+    auto dist = hypot(hypot(xd, yd), zd);
+    if (dist < particle->sigma)
+        atomicAdd(intersects, 1);
+}
+
+
+/*
+ * Overload of check_intersect that accepts another argument <curr_part_id>,
+ *  to ignore checking with particle with that id. This overload is used in move function
+ */
+__global__ void
+check_intersect (
+        const Particle *particle,
+        const Particle *ordered_particles,
+        const uint *cellStartIdx,
+        uint curr_cell_id,
+        const D3<double> *L,
+        int *intersects,
+        uint curr_part_id) {
+
+    uint startIdx = cellStartIdx[curr_cell_id];
+    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (curr_part_id == ordered_particles[startIdx+idx].id)
+        return;
+
+    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
+                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
+
+    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
+                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
+
+    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
+                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
 
     auto dist = hypot(hypot(xd, yd), zd);
     if (dist < particle->sigma)
         atomicAdd(intersects, 1);
 }
 
-std::vector<size_t> Grid::check_intersect_cpu_single(Particle particle, std::vector<Particle> particles, D3<double> L, uint req_cell_id) {
+std::vector<size_t>
+Grid::check_intersect_cpu(Particle particle, std::vector<Particle> particles) {
     std::vector<size_t> res;
     for (Particle p: particles) {
         auto xd = fabs(particle.x - p.x) < L.x - fabs(particle.x - p.x) ?
@@ -150,27 +163,19 @@ std::vector<size_t> Grid::check_intersect_cpu_single(Particle particle, std::vec
 
         double dist = hypot(hypot(xd, yd), zd);
         auto this_cell_id = cell_id(get_cell(p.get_coord()));
-        if (dist < particle.sigma && this_cell_id == req_cell_id) {
-            std::cout << particle.id << " intersected with " << p.id << std::endl;
+        if (dist < particle.sigma)
             res.push_back(p.id);
-        }
     }
     return res;
 }
 
-__global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
-    cellStartIdx[cell_idx+threadIdx.x]++;
-}
-
-int check_intersect_cpu(Particle particle, std::vector<Particle> particles, D3<double> L) {
-    int intersects = 0;
-    for (Particle p : particles) {
-
-        //auto xd = fabs(particle.x - p.x);
-        //auto yd = fabs(particle.y - p.y);
-        //auto zd = fabs(particle.z - p.z);
-
-
+/*
+ * Useful for debug purposes only, when check_intersect on CUDA is no working correctly
+ */
+std::vector<size_t>
+Grid::check_intersect_cpu(Particle particle, std::vector<Particle> particles, uint req_cell_id) {
+    std::vector<size_t> res;
+    for (Particle p: particles) {
         auto xd = fabs(particle.x - p.x) < L.x - fabs(particle.x - p.x) ?
                         fabs(particle.x - p.x) : L.x - fabs(particle.x - p.x);
 
@@ -181,10 +186,15 @@ int check_intersect_cpu(Particle particle, std::vector<Particle> particles, D3<d
                         fabs(particle.z - p.z) : L.z - fabs(particle.z - p.z);
 
         double dist = hypot(hypot(xd, yd), zd);
-        if (dist < particle.sigma)
-            intersects++;
+        auto this_cell_id = cell_id(get_cell(p.get_coord()));
+        if (dist < particle.sigma && this_cell_id == req_cell_id)
+            res.push_back(p.id);
     }
-    return intersects;
+    return res;
+}
+
+__global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
+    cellStartIdx[cell_idx+threadIdx.x]++;
 }
 
 void Grid::fill() {
@@ -212,6 +222,7 @@ void Grid::fill() {
 
         D3<double> p_point = particle.get_coord();
         D3<int> p_cell = get_cell(p_point);
+        uint p_cell_id = cell_id(p_cell);
 
         bool intersected = false;
 
@@ -219,8 +230,10 @@ void Grid::fill() {
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
-                    D3<int> offset = {x_off, y_off, z_off};
-                    uint curr_cell_id = cell_id(p_cell + offset);
+                    // TODO: do it better, without double
+                    D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
+                    uint curr_cell_id = cell_id(get_cell(p_point + offset));
+                    /************************************/
 
                     // number of particles in cell
                     size_t partInCell = partPerCell[curr_cell_id];
@@ -233,21 +246,12 @@ void Grid::fill() {
                     check_intersect<<<1, partInCell>>>( cuda_particle, cuda_ordered_particles,
                                                 cellStartIdx, curr_cell_id, cudaL, intersectsCuda );
 
-                    auto intersected_cpu = check_intersect_cpu_single(particle, particles, L, curr_cell_id);
-
                     int *intersects = new int;
                     cudaMemcpy(intersects, intersectsCuda, sizeof(int),
                                                             cudaMemcpyDeviceToHost);
 
                     if (*intersects > 0)
                         intersected = true;
-
-                    if (intersected_cpu.size() && !intersected) {
-                        std::cout << particle.id << ": ";
-                        for (auto pid : intersected_cpu) {
-                            std::cout << pid << " ";
-                        }
-                    }
 
                     cudaMemset(intersectsCuda, 0, sizeof(int));
                     delete intersects;
@@ -261,12 +265,6 @@ void Grid::fill() {
 
         auto add_start = get_current_time_fenced();
         if (!intersected) {
-            auto intersects_loc = check_intersect_cpu(particle, particles, L);
-            if (intersects_loc > 0) {
-                int_cnt++;
-                std::cout << "Intersected anyway: " << intersects_loc << std::endl;
-            }
-
             particles.push_back(particle);
             if (particles.size() % 1000 == 0) std::cout << "size = " << particles.size() << '\n';
             auto cell_idx = cell_id(p_cell);
@@ -302,48 +300,12 @@ void Grid::fill() {
     std::cout << std::endl;
 }
 
-__global__ void
-check_intersect_move (
-        const Particle *particle,
-        const Particle *ordered_particles,
-        const uint *cellStartIdx,
-        uint curr_cell_id,
-        const D3<double> *L,
-        int *intersects,
-        uint curr_part_id) {
-
-    uint startIdx = cellStartIdx[curr_cell_id];
-    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (curr_part_id == ordered_particles[startIdx+idx].id)
-        return;
-
-    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
-                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
-
-    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
-                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
-
-    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
-                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
-
-    auto dist = hypot(hypot(xd, yd), zd);
-    if (dist < particle->sigma)
-        atomicAdd(intersects, 1);
-}
-
 __global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id) {
     cellStartIdx[new_cell_id+1 + threadIdx.x]++;
 }
 
 __global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id) {
     cellStartIdx[init_cell_id+1 + threadIdx.x]--;
-}
-
-__global__ void print_particles_kernel(Particle *particles, size_t n) {
-    for (size_t i = 0; i < n; i++)
-        printf("%lu ", particles[i].id);
-    printf("\n");
 }
 
 void Grid::move(double dispmax) {
@@ -389,8 +351,10 @@ void Grid::move(double dispmax) {
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
-                    D3<int> offset = {x_off, y_off, z_off};
-                    uint curr_cell_id = cell_id(p_cell + offset);
+                    // TODO: do it better, without double
+                    D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
+                    uint curr_cell_id = cell_id(get_cell(p_point + offset));
+                    /************************************/
 
                     // number of particles in cell
                     size_t partInCell = partPerCell[curr_cell_id];
@@ -400,9 +364,8 @@ void Grid::move(double dispmax) {
 
                     const Particle *cuda_ordered_particles = particles_ordered.get_array();
                     // TODO: Variable block size
-                    check_intersect_move<<<1, partInCell>>>(cuda_particle, cuda_ordered_particles,
-                                                       cellStartIdx, curr_cell_id, cudaL,
-						       intersectsCuda, curr_part_id);
+                    check_intersect<<<1, partInCell>>>(cuda_particle, cuda_ordered_particles,
+                                cellStartIdx, curr_cell_id, cudaL, intersectsCuda, curr_part_id);
 
                     int *intersects = new int;
                     cudaMemcpy(intersects, intersectsCuda, sizeof(int),
@@ -424,7 +387,6 @@ void Grid::move(double dispmax) {
             i.x = particle.x;
             i.y = particle.y;
             i.z = particle.z;
-//            auto cell_idx = cell_id(p_cell);
 
             // Cell start index in ordered array for the current particle (which is inserted)
             uint *partCellStartIdx = new uint;
