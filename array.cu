@@ -1,6 +1,16 @@
+#include <iostream>
 #include <stdexcept>
 #include "array.cuh"
 
+// this is helper function for debugging, it prints all elements in particles array
+__global__ void print_kernel(Particle *particles, size_t size) {
+    __syncthreads();
+    for (int i = 0; i < size; i++) {
+        printf("particle[%i]: %f %f %f %f\n", i, particles[i].x, particles[i].y,
+                                particles[i].z, particles[i].sigma);
+    }
+    __syncthreads();
+}
 
 OrderedArray::OrderedArray(size_t capacity) {
     this->size = 0;
@@ -13,18 +23,23 @@ OrderedArray::~OrderedArray() {
 }
 
 __global__ void get_particle_index_kernel(
-                Particle *particles, size_t particle_id, uint *index)
+                Particle *particles, size_t particle_id, uint *index, size_t size)
 {
-    if (particles[threadIdx.x].id == particle_id)
-        *index = threadIdx.x;
+    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadId >= size)
+        return;
+
+    if (particles[threadId].id == particle_id)
+        *index = threadId;
 }
 
 int OrderedArray::remove_by_id(size_t id) {
     uint *cudaIndex;
     cudaMalloc(&cudaIndex, sizeof(uint));
 
-    // TODO: Variable block size
-    get_particle_index_kernel<<<1, size>>>(data, id, cudaIndex);
+    int threadsPerBlock = 256;
+    size_t blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
+    get_particle_index_kernel<<<blocksPerGrid, threadsPerBlock>>>(data, id, cudaIndex, size);
 
     uint *index = new uint;
     cudaMemcpy(index, cudaIndex, sizeof(uint), cudaMemcpyDeviceToHost);
@@ -38,6 +53,7 @@ int OrderedArray::remove_by_id(size_t id) {
 
 int OrderedArray::remove(size_t index) {
     if (index > size) {
+        std::cout << "INDEX OUT OF RANGE" << std::endl;
         return INDEX_OUT_OF_RANGE;
     }
 
@@ -58,14 +74,6 @@ int OrderedArray::remove(size_t index) {
 
     cudaFree(data_temp);
     return 0;
-}
-
-// this is helper function for debugging, it prints all elements in particles array
-__global__ void print_kernel(Particle *particles, size_t size) {
-    for (int i = 0; i < size; i++) {
-        printf("particle[%i]: %f %f %f %f\n", i, particles[i].x, particles[i].y,
-                                particles[i].z, particles[i].sigma);
-    }
 }
 
 int OrderedArray::insert(Particle value, size_t index) {
