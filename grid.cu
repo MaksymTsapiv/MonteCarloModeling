@@ -115,6 +115,7 @@ check_intersect (
 
     uint startIdx = cellStartIdx[curr_cell_id];
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
     auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
                         L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
 
@@ -210,7 +211,8 @@ Grid::check_intersect_cpu(Particle particle, uint req_cell_id) {
 }
 
 __global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
-    cellStartIdx[cell_idx+threadIdx.x]++;
+    int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    cellStartIdx[cell_idx + threadId]++;
 }
 
 void Grid::fill() {
@@ -256,8 +258,10 @@ void Grid::fill() {
                         continue;
 
                     const Particle *cuda_ordered_particles = particles_ordered.get_array();
-                    // TODO: Variable block size
-                    check_intersect<<<1, partInCell>>>( cuda_particle, cuda_ordered_particles,
+
+                    int threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
+                    int numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
+                    check_intersect<<<numBlocks, threadsPerBlock>>>( cuda_particle, cuda_ordered_particles,
                                                 cellStartIdx, curr_cell_id, cudaL, intersectsCuda );
 
                     int *intersects = new int;
@@ -281,23 +285,28 @@ void Grid::fill() {
         if (!intersected) {
             particles.push_back(particle);
             if (particles.size() % 1000 == 0) std::cout << "size = " << particles.size() << '\n';
-            auto cell_idx = cell_id(p_cell);
 
             // Cell start index in ordered array for the current particle (which is inserted)
             uint *partCellStartIdx = new uint;
-            cudaMemcpy(partCellStartIdx, &cellStartIdx[cell_idx], sizeof(uint),
+            cudaMemcpy(partCellStartIdx, &cellStartIdx[p_cell_id], sizeof(uint),
                                                         cudaMemcpyDeviceToHost);
 
             auto add_start2 = get_current_time_fenced();
 
             particles_ordered.insert(particle, *partCellStartIdx);
-            partPerCell[cell_idx]++;
+            partPerCell[p_cell_id]++;
 
             auto add_end2 = get_current_time_fenced();
 
-            // TODO: Variable block size
-            if (static_cast<int>(n_cells-cell_idx-1) > 0)
-                update_kernel<<<1, n_cells-cell_idx-1>>>(cellStartIdx, cell_idx+1);
+            if (n_cells < p_cell_id + 1)
+                throw std::runtime_error("Cell_idx > number of cells, which is impossible");
+
+            size_t N = n_cells-p_cell_id-1;
+            if (N > 0) {
+                int threadsPerBlock = std::min(N, MAX_BLOCK_THREADS);
+                int numBlocks = (N + threadsPerBlock - 1) / threadsPerBlock;
+                update_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, p_cell_id+1);
+            }
         }
         else // If a particle wasn't inserted, do not increment Particle's nextId counter
             Particle::nextId--;
@@ -322,11 +331,13 @@ void Grid::fill() {
 }
 
 __global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id) {
-    cellStartIdx[new_cell_id+1 + threadIdx.x]++;
+    int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    cellStartIdx[new_cell_id+1 + threadId]++;
 }
 
 __global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id) {
-    cellStartIdx[init_cell_id+1 + threadIdx.x]--;
+    int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    cellStartIdx[init_cell_id+1 + threadId]--;
 }
 
 void Grid::move(double dispmax) {
@@ -383,8 +394,10 @@ void Grid::move(double dispmax) {
                         continue;
 
                     const Particle *cuda_ordered_particles = particles_ordered.get_array();
-                    // TODO: Variable block size
-                    check_intersect<<<1, partInCell>>>(cuda_particle, cuda_ordered_particles,
+
+                    int threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
+                    int numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
+                    check_intersect<<<numBlocks, threadsPerBlock>>>(cuda_particle, cuda_ordered_particles,
                                 cellStartIdx, curr_cell_id, cudaL, intersectsCuda, curr_part_id);
 
                     int *intersects = new int;
@@ -426,17 +439,15 @@ void Grid::move(double dispmax) {
                 if (insert_status)
                     throw std::runtime_error("Error in insert");
 
-                uint cells_in_range = init_p_cell_id > new_p_cell_id ?
+                size_t cells_in_range = init_p_cell_id > new_p_cell_id ?
                             init_p_cell_id - new_p_cell_id : new_p_cell_id - init_p_cell_id;
 
-                if (init_p_cell_id > new_p_cell_id) {
-                    // TODO: Variable block size
-                    backward_move_kernel<<<1, cells_in_range>>>(cellStartIdx, new_p_cell_id);
-                }
-                else if (init_p_cell_id < new_p_cell_id) {
-                    // TODO: Variable block size
-                    forward_move_kernel<<<1, cells_in_range>>>(cellStartIdx, init_p_cell_id);
-                }
+                int threadsPerBlock = std::min(cells_in_range, MAX_BLOCK_THREADS);
+                int numBlocks = (cells_in_range + threadsPerBlock - 1) / threadsPerBlock;
+                if (init_p_cell_id > new_p_cell_id)
+                    backward_move_kernel<<<numBlocks, cells_in_range>>>(cellStartIdx, new_p_cell_id);
+                else if (init_p_cell_id < new_p_cell_id)
+                    forward_move_kernel<<<numBlocks, cells_in_range>>>(cellStartIdx, init_p_cell_id);
             }
             success++;
         }

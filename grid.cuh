@@ -11,6 +11,8 @@
 #include "d3.cuh"
 #include "array.cuh"
 
+#define MAX_BLOCK_THREADS 512LU
+
 class Grid {
 private:
     /* Number of cells per each dimention */
