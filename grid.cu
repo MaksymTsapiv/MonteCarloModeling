@@ -35,12 +35,29 @@ double Grid::volume() const {
     return L.x * L.y * L.z;
 }
 
-size_t Grid::n_particles() const {
+size_t Grid::de_facto_n() const {
     return particles.size();
 }
 
 double Grid::density() const {
-    return n_particles() / volume();
+    return n / volume();
+}
+
+double Grid::packing_fraction() const {
+    return (n*M_PI*pow(p_sigma, 3)) / (6.0*volume());
+}
+
+void Grid::print_grid_info() const {
+    std::cout << "Simulation box size:\t\t" << L.x << " x " << L.y << " x " << L.z
+        << " (volume = " << volume() << ")"<< std::endl;
+    std::cout << "Num of cells per dimention:\t"
+        << dim_cells.x << ", " << dim_cells.y << ", " << dim_cells.z << std::endl;
+    std::cout << "Cell size:\t\t\t"
+        << cell_size.x << " x " << cell_size.y << " x " << cell_size.z << std::endl;
+    std::cout << "Packing fraction:\t\t" << packing_fraction() << std::endl;
+    std::cout << "Density:\t\t\t" << density() << std::endl;
+    std::cout << "Expected number of particles:\t" << n << std::endl;
+    std::cout << "Particle's sigma (diameter):\t" << p_sigma << std::endl << std::endl;
 }
 
 template <typename T>
@@ -76,8 +93,7 @@ D3<int> Grid::get_cell(D3<T> p) const {
 
 template <typename T>
 size_t Grid::cell_id(D3<T> p) const {
-    D3<int> cell = get_cell(p);
-    return cell.x + cell.y * dim_cells.y + cell.z * dim_cells.z * dim_cells.z;
+    return p.x + p.y*dim_cells.y + p.z*dim_cells.z*dim_cells.z;
 }
 
 
@@ -149,7 +165,7 @@ check_intersect (
 }
 
 std::vector<size_t>
-Grid::check_intersect_cpu(Particle particle, std::vector<Particle> particles) {
+Grid::check_intersect_cpu(Particle particle) {
     std::vector<size_t> res;
     for (Particle p: particles) {
         auto xd = fabs(particle.x - p.x) < L.x - fabs(particle.x - p.x) ?
@@ -173,7 +189,7 @@ Grid::check_intersect_cpu(Particle particle, std::vector<Particle> particles) {
  * Useful for debug purposes only, when check_intersect on CUDA is no working correctly
  */
 std::vector<size_t>
-Grid::check_intersect_cpu(Particle particle, std::vector<Particle> particles, uint req_cell_id) {
+Grid::check_intersect_cpu(Particle particle, uint req_cell_id) {
     std::vector<size_t> res;
     for (Particle p: particles) {
         auto xd = fabs(particle.x - p.x) < L.x - fabs(particle.x - p.x) ?
@@ -203,8 +219,6 @@ void Grid::fill() {
 
     uint int_cnt = 0;
 
-    double sigma = 1.0;
-
     long long fors_time = 0;
     long long add_time = 0;
 
@@ -214,7 +228,7 @@ void Grid::fill() {
         double y = L.y * random_double(0, 1);
         double z = L.z * random_double(0, 1);
 
-        Particle particle = Particle(x, y, z, sigma);
+        Particle particle = Particle(x, y, z, p_sigma);
 
         Particle *cuda_particle;
         cudaMalloc(&cuda_particle, sizeof(Particle));
@@ -285,12 +299,19 @@ void Grid::fill() {
             if (static_cast<int>(n_cells-cell_idx-1) > 0)
                 update_kernel<<<1, n_cells-cell_idx-1>>>(cellStartIdx, cell_idx+1);
         }
+        else // If a particle wasn't inserted, do not increment Particle's nextId counter
+            Particle::nextId--;
+
         auto add_end = get_current_time_fenced();
         add_time += to_us(add_end - add_start);
 
         count_tries++;
         cudaFree(cuda_particle);
     }
+    if (n != de_facto_n())
+        throw std::runtime_error("Actual number of particles <de_facto_n()> in grid\
+                is not equal to desired number of particles <n> after fill");
+
     std::cout << "Tries: " << count_tries << std::endl;
     std::cout << "Intersected: " << int_cnt << std::endl;
 
@@ -309,7 +330,6 @@ __global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id) {
 }
 
 void Grid::move(double dispmax) {
-    double sigma = 1.0;
     uint success = 0;
 
     for (auto & i : particles) {
@@ -336,7 +356,7 @@ void Grid::move(double dispmax) {
         double y = i.y + vec_y * dispmax;
         double z = i.z + vec_z * dispmax;
 
-        Particle particle = Particle(x, y, z, sigma);
+        Particle particle = Particle(x, y, z, p_sigma);
 
         Particle *cuda_particle;
         cudaMalloc(&cuda_particle, sizeof(Particle));
@@ -388,34 +408,35 @@ void Grid::move(double dispmax) {
             i.y = particle.y;
             i.z = particle.z;
 
-            // Cell start index in ordered array for the current particle (which is inserted)
-            uint *partCellStartIdx = new uint;
-            cudaMemcpy(partCellStartIdx, &cellStartIdx[new_p_cell_id], sizeof(uint),
-                       cudaMemcpyDeviceToHost);
+            if (new_p_cell_id != init_p_cell_id) {
+                // Cell start index in ordered array for the current particle (which is inserted)
+                uint *partCellStartIdx = new uint;
+                cudaMemcpy(partCellStartIdx, &cellStartIdx[new_p_cell_id], sizeof(uint),
+                           cudaMemcpyDeviceToHost);
 
-            partPerCell[new_p_cell_id]++;
-            partPerCell[init_p_cell_id]--;
+                partPerCell[new_p_cell_id]++;
+                partPerCell[init_p_cell_id]--;
 
+                int remove_status = particles_ordered.remove_by_id(i.id);
+                if (remove_status)
+                    throw std::runtime_error("Error in remove");
 
-            Particle curr_particle = i;
-            int remove_status = particles_ordered.remove_by_id(i.id);
-            if (remove_status)
-                throw std::runtime_error("Error in remove");
+                Particle curr_particle = i;
+                int insert_status = particles_ordered.insert(curr_particle, *partCellStartIdx);
+                if (insert_status)
+                    throw std::runtime_error("Error in insert");
 
-            int insert_status = particles_ordered.insert(curr_particle, *partCellStartIdx);
-            if (insert_status)
-                throw std::runtime_error("Error in insert");
+                uint cells_in_range = init_p_cell_id > new_p_cell_id ?
+                            init_p_cell_id - new_p_cell_id : new_p_cell_id - init_p_cell_id;
 
-            uint cells_in_range = init_p_cell_id > new_p_cell_id ?
-                        init_p_cell_id - new_p_cell_id : new_p_cell_id - init_p_cell_id;
-
-            if (init_p_cell_id > new_p_cell_id) {
-                // TODO: Variable block size
-                backward_move_kernel<<<1, cells_in_range>>>(cellStartIdx, new_p_cell_id);
-            }
-            else if (init_p_cell_id < new_p_cell_id) {
-                // TODO: Variable block size
-                forward_move_kernel<<<1, cells_in_range>>>(cellStartIdx, init_p_cell_id);
+                if (init_p_cell_id > new_p_cell_id) {
+                    // TODO: Variable block size
+                    backward_move_kernel<<<1, cells_in_range>>>(cellStartIdx, new_p_cell_id);
+                }
+                else if (init_p_cell_id < new_p_cell_id) {
+                    // TODO: Variable block size
+                    forward_move_kernel<<<1, cells_in_range>>>(cellStartIdx, init_p_cell_id);
+                }
             }
             success++;
         }

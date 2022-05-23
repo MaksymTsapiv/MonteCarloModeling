@@ -4,6 +4,9 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <stdexcept>
+#include <iostream>
+
 #include "particle.cuh"
 #include "d3.cuh"
 #include "array.cuh"
@@ -11,7 +14,7 @@
 class Grid {
 private:
     /* Number of cells per each dimention */
-    D3<uint> dim_cells {10};
+    D3<uint> dim_cells {0};
     D3<double> cell_size {0.0};
     std::vector<Particle> particles{};
 
@@ -23,6 +26,9 @@ private:
 
     /* number of cells in system */
     size_t n_cells = 0;
+
+    /* Grid particle's sigma -- diameter */
+    double p_sigma = 1.0;
 
     /************************ On GPU ************************/
     D3<double> *cudaL;
@@ -36,14 +42,13 @@ private:
 
 public:
     Grid(double x, double y, double z, D3<uint> dim_cells_, size_t n_particles) :
-        Grid(x, y, z, n_particles)
-    {
-        dim_cells = dim_cells_;
-    }
-    Grid(double x, double y, double z, size_t n_particles) : particles_ordered(n_particles), n(n_particles)
+        particles_ordered(n_particles), n(n_particles), dim_cells{dim_cells_}
     {
         L = D3<double>{x, y, z};
         cell_size = D3<double>{L.x / dim_cells.x, L.y / dim_cells.y, L.z / dim_cells.z};
+
+        if (cell_size.x < 1.0 || cell_size.y < 1.0 || cell_size.z < 1.0)
+            throw std::runtime_error("Cell size is less than 1.0, e.g. smaller than particle size");
 
         n_cells = dim_cells.x * dim_cells.y * dim_cells.z;
 
@@ -58,6 +63,8 @@ public:
 
         cudaMalloc(&intersectsCuda, sizeof(int));
         cudaMemset(intersectsCuda, 0, sizeof(int));
+
+        print_grid_info();
     }
     ~Grid() {
         cudaFree(cudaL);
@@ -80,10 +87,10 @@ public:
 
 
     std::vector<size_t>
-    check_intersect_cpu(Particle particle, std::vector<Particle> particles);
+    check_intersect_cpu(Particle particle);
 
     std::vector<size_t>
-    check_intersect_cpu(Particle particle, std::vector<Particle> particles, uint cell_id);
+    check_intersect_cpu(Particle particle, uint cell_id);
 
     template <typename T>
     uint cell_at_offset(D3<uint> init_cell, D3<T> offset) const;
@@ -97,9 +104,17 @@ public:
 
     std::vector<Particle> get_particles() const;
     Particle get_particle(uint id) const;
-    double density() const;
-    size_t n_particles() const;
+    
+    /* Actual number of particles in vector of particles */
+    size_t de_facto_n() const;
+
     double volume() const;
+
+    /* density() and packing_fraction() computes value for desired n, not actual */
+    double density() const;
+    double packing_fraction() const;
+
+    void print_grid_info() const;
 };
 
 

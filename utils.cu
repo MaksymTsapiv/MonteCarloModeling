@@ -21,7 +21,7 @@ std::vector<double> compute_rdf(const Grid &grid, double dr, double rmax) {
     std::vector<double> rdf(nk, 0);
 
     std::vector<Particle> particles = grid.get_particles();
-    auto n_parts = grid.n_particles();
+    auto n_parts = grid.de_facto_n();
 
     auto grid_size = grid.L;
 
