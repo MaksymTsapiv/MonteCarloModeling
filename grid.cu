@@ -211,11 +211,6 @@ void Grid::fill() {
     size_t count_tries = 0;
     size_t max_tries = 10000 * n;
 
-    uint int_cnt = 0;
-
-    long long fors_time = 0;
-    long long add_time = 0;
-
     while ((particles.size() < n) && count_tries < max_tries) {
 
         double x = L.x * random_double(0, 1);
@@ -234,7 +229,6 @@ void Grid::fill() {
 
         bool intersected = false;
 
-        auto for_start = get_current_time_fenced();
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
@@ -265,6 +259,7 @@ void Grid::fill() {
 
                     if (*intersects > 0) {
                         intersected = true;
+                        delete intersects;
                         break;
                     }
 
@@ -274,41 +269,14 @@ void Grid::fill() {
             }
             if (intersected) break;
         }
-        auto for_end = get_current_time_fenced();
-        fors_time += to_us(for_end - for_start);
 
-        auto add_start = get_current_time_fenced();
         if (!intersected) {
-            particles.push_back(particle);
-            if (particles.size() % 1000 == 0) std::cout << "size = " << particles.size() << '\n';
-
-            // Cell start index in ordered array for the current particle (which is inserted)
-            uint *partCellStartIdx = new uint;
-            cudaMemcpy(partCellStartIdx, &cellStartIdx[p_cell_id], sizeof(uint),
-                                                        cudaMemcpyDeviceToHost);
-
-            auto add_start2 = get_current_time_fenced();
-
-            particles_ordered.insert(particle, *partCellStartIdx);
-            partPerCell[p_cell_id]++;
-
-            auto add_end2 = get_current_time_fenced();
-
-            if (n_cells < p_cell_id + 1)
-                throw std::runtime_error("Cell_idx > number of cells, which is impossible");
-
-            size_t N = n_cells-p_cell_id-1;
-            if (N > 0) {
-                int threadsPerBlock = std::min(N, MAX_BLOCK_THREADS);
-                int numBlocks = (N + threadsPerBlock - 1) / threadsPerBlock;
-                update_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, p_cell_id+1, N);
-            }
+            complex_insert(particle);
+            if (particle.id % 1000 == 0)
+                std::cout << "Inserting " << particle.id << "'s" << std::endl;
         }
         else // If a particle wasn't inserted, do not increment Particle's nextId counter
             Particle::nextId--;
-
-        auto add_end = get_current_time_fenced();
-        add_time += to_us(add_end - add_start);
 
         count_tries++;
         cudaFree(cuda_particle);
@@ -318,10 +286,6 @@ void Grid::fill() {
                 is not equal to desired number of particles <n> after fill");
 
     std::cout << "Tries: " << count_tries << std::endl;
-    std::cout << "Intersected: " << int_cnt << std::endl;
-
-    std::cout << "Fors time: " << fors_time << std::endl;
-    std::cout << "Add time:  " << add_time << std::endl << std::endl;
 
     std::cout << std::endl;
 }
@@ -620,42 +584,67 @@ void Grid::export_to_pdb(const std::string& fn) {
     }
 }
 
-/*
- * Expects that constructor has already been called, number of cells per dimention and grid size
- * are set
- */
-void Grid::import_from_pdb(const std::string& fn) {
-    std::ifstream pdb_file(fn);
-    std::string line;
-    while (std::getline(pdb_file, line)) {
-        if (line.substr(0, 4) == "ATOM") {
-            std::string x_str = line.substr(30, 8);
-            std::string y_str = line.substr(38, 8);
-            std::string z_str = line.substr(46, 8);
-            std::string occ_str = line.substr(54, 6);
+void Grid::export_to_cf(const std::string& fn) {
+    std::ofstream cf_file(fn);
+    if (!cf_file)
+        throw std::runtime_error("Error while opening file for export " + fn);
 
-            double x = std::stod(x_str);
-            double y = std::stod(y_str);
-            double z = std::stod(z_str);
-            double occ = std::stod(occ_str);
-
-            particles.emplace_back(x, y, z, occ);
-        }
+    for (auto p: particles) {
+        char buff[256];
+        sprintf(buff, "%15ld%15ld%4d%20.10lf%20.10lf%20.10lf\n", p.id, p.id, 1, p.x, p.y, p.z);
+        std::string buff_str{buff};
+        cf_file << buff_str;
     }
-    pdb_file.close();
+}
 
-    if (particles.size() > n)
-        throw std::invalid_argument("Too many particles in PDB file.\
-                Either grid is badly preconfigured or PDB file is corrupted.");
+void Grid::import_from_cf(const std::string& fn) {
+    // import from custom format file
+    std::ifstream cf_file(fn);
+    if (!cf_file)
+        throw std::runtime_error("Error while opening file for import " + fn);
 
-    std::vector<Particle> sorted_particles;
-    sorted_particles.reserve(particles.size());
-    for (auto particle : particles)
-        sorted_particles.push_back(particle);
+    std::string line;
 
-    std::sort(sorted_particles.begin(), sorted_particles.end(), [](const Particle &a, const Particle &b) {
-        return a.x < b.x || (a.x == b.x && a.y < b.y) || (a.x == b.x && a.y == b.y && a.z < b.z);
-    });
+    while (std::getline(cf_file, line)) {
+        std::stringstream ss(line);
 
-    particles_ordered.set_data(sorted_particles.data(), sorted_particles.size());
+        // skip first 3 columns, because they are useless for particle constructor
+        long trash;
+        ss >> trash >> trash >> trash;
+
+        double x, y, z;
+        ss >> x >> y >> z;
+        Particle p(x, y, z, p_sigma);
+        complex_insert(p);
+    }
+    cf_file.close();
+
+    if (particles.size() != n)
+        throw std::invalid_argument("During import: too many particles in CF file.\
+                Either grid is badly preconfigured or CF file is corrupted.");
+}
+
+void Grid::complex_insert(Particle p) {
+    particles.push_back(p);
+    auto p_cell_id = cell_id(get_cell(p.get_coord()));
+
+    // Cell start index in ordered array for the current particle (which is inserted)
+    uint *partCellStartIdx = new uint;
+    cudaMemcpy(partCellStartIdx, &cellStartIdx[p_cell_id], sizeof(uint),
+                                                cudaMemcpyDeviceToHost);
+
+    particles_ordered.insert(p, *partCellStartIdx);
+    partPerCell[p_cell_id]++;
+
+    if (n_cells < p_cell_id + 1)
+        throw std::runtime_error("Cell_idx > number of cells, which is impossible");
+
+    size_t N = n_cells-p_cell_id-1;
+    if (N > 0) {
+        int threadsPerBlock = std::min(N, MAX_BLOCK_THREADS);
+        int numBlocks = (N + threadsPerBlock - 1) / threadsPerBlock;
+        update_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, p_cell_id+1, N);
+    }
+
+    free(partCellStartIdx);
 }

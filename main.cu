@@ -9,22 +9,17 @@
 #include "grid.cuh"
 #include "utils.cuh"
 
-
-//__global__ void check_intersect_global(Particle *particle, Particle *particles) {
-
-//}
-
 int main(int argc, char* argv[]) {
+    // TODO: Parse command line options
     if (argc != 2) {
         std::cout << "Wrong arguments!" << std::endl;
         exit(1);
     }
 
     std::ifstream data(argv[1]);
-    if (!data) {
-        std::cout << "Error while opening the config file!" << std::endl;
-        exit(3);
-    }
+    if (!data)
+        throw std::runtime_error("Error while opening the config file " + std::string(argv[1]));
+
     auto config = parse_conf(data);
 
     auto conf = Config::from_map(config);
@@ -34,11 +29,16 @@ int main(int argc, char* argv[]) {
     const double dr = 0.1;
     const double rmax = grid.L.x / 2;
 
+    grid.import_from_cf("fill.cf");
+    grid.move(conf.dispmax);
+    grid.export_to_pdb("move.pdb");
+    exit(1);
 
     auto start_fill = get_current_time_fenced();
     grid.fill();
     auto finish_fill = get_current_time_fenced();
     grid.export_to_pdb("fill.pdb");
+    grid.export_to_cf("fill.cf");
 
     auto rdf1 = compute_rdf(grid, dr, rmax);
     save_rdf_to_file(rdf1, dr, rmax, "rdf_fill.dat");
@@ -53,16 +53,10 @@ int main(int argc, char* argv[]) {
     save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
 
 
-    //std::cout << "--------- Radial distibution function ---------" << std::endl;
-    //for (auto rdf_current : rdf) {
-        //std::cout << rdf_current << std::endl;
-    //}
-
-
     std::cout << "fill: " << to_us(finish_fill - start_fill) << " us"
               << "\t=  "  << to_s(finish_fill - start_fill) << " s"
-              << std::endl
-              << "move: " << to_us(finish_move - start_move) << " us"
+              << std::endl;
+    std::cout << "move: " << to_us(finish_move - start_move) << " us"
               << "\t=  "  << to_s(finish_move - start_move) << " s"
               << std::endl;
 

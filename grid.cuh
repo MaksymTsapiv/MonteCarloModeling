@@ -99,12 +99,29 @@ public:
     template <typename T>
     uint cell_at_offset(D3<uint> init_cell, D3<T> offset) const;
 
+    /*
+     * Insert particle into <particles_ordered> array, updating <cellStartIdx> and <partPerCell>.
+     *  It also adds particleto CPU <particles> vector
+     *  Basically, it does everything needed to insert paticle and preserve correctness of grid.
+     */
+    void complex_insert(Particle p);
+
+
     void fill();
     void fill_cpu();
 
     void move(double dispmax);
     void export_to_pdb(const std::string& fn);
-    void import_from_pdb(const std::string& fn);
+
+    /* Import and export to Custom Format (cf) */
+
+    void export_to_cf(const std::string& fn);
+
+    /*
+     * import_from_cf expects that constructor has already been called, number of cells per
+     * dimention and grid size are set
+     */
+    void import_from_cf(const std::string& fn);
 
     std::vector<Particle> get_particles() const;
     Particle get_particle(uint id) const;
