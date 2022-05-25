@@ -5,26 +5,26 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <cstddef>
-#include <random>
 #include <cmath>
-#include <utility>
 #include <vector>
 #include <iostream>
-#include <algorithm>
 
 #include "grid.cuh"
 #include "particle.cuh"
 #include "time_measurement.cuh"
 
+//std::random_device rd;
+//std::mt19937 gen(rd());
+std::mt19937 gen(1);
+
 double random_double(double from, double to) {
-    //std::random_device rd;
-    //static std::mt19937 rand_double(rd());
-
-    static std::mt19937 rand_double(1);
-
     std::uniform_real_distribution<> dist(from, to);
-    return dist(rand_double);
+    return dist(gen);
+}
+
+int random_int(int from, int to) {
+    std::uniform_int_distribution<> dist(from, to);
+    return dist(gen);
 }
 
 std::vector<Particle> Grid::get_particles() const {
@@ -341,7 +341,9 @@ check_intersect (
 void Grid::move(double dispmax) {
     uint success = 0;
 
-    for (auto & i : particles) {
+    for (size_t j = 0; j < n; j++) {
+        auto i = particles[random_int(0, n-1)];
+
         auto curr_part_id = i.id;
 
         D3<int> init_p_cell = get_cell(i.get_coord());

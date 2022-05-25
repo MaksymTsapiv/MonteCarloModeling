@@ -1,11 +1,11 @@
 #ifndef MODEL_GRID_CUH
 #define MODEL_GRID_CUH
 
-#include <map>
 #include <vector>
 #include <string>
 #include <stdexcept>
 #include <iostream>
+#include <random>
 
 #include "particle.cuh"
 #include "d3.cuh"
@@ -140,5 +140,6 @@ public:
 
 
 double random_double(double from, double to);
+int random_int(int from, int to);
 
 #endif //MODEL_GRID_CUH

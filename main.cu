@@ -29,16 +29,15 @@ int main(int argc, char* argv[]) {
     const double dr = 0.1;
     const double rmax = grid.L.x / 2;
 
-    grid.import_from_cf("fill.cf");
-    grid.move(conf.dispmax);
-    grid.export_to_pdb("move.pdb");
-    exit(1);
+    //grid.import_from_cf("fill.cf");
+    //grid.move(conf.dispmax);
+    //grid.export_to_pdb("move.pdb");
+    //exit(1);
 
     auto start_fill = get_current_time_fenced();
     grid.fill();
     auto finish_fill = get_current_time_fenced();
     grid.export_to_pdb("fill.pdb");
-    grid.export_to_cf("fill.cf");
 
     auto rdf1 = compute_rdf(grid, dr, rmax);
     save_rdf_to_file(rdf1, dr, rmax, "rdf_fill.dat");
@@ -47,7 +46,9 @@ int main(int argc, char* argv[]) {
     auto start_move = get_current_time_fenced();
     grid.move(conf.dispmax);
     auto finish_move = get_current_time_fenced();
+
     grid.export_to_pdb("move.pdb");
+    grid.export_to_cf("move.cf");
 
     auto rdf2 = compute_rdf(grid, dr, rmax);
     save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
