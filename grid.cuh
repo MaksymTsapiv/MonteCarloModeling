@@ -23,8 +23,10 @@ private:
 
     /* number of cells in system */
     size_t n_cells = 0;
+    double energy = 0;
 
     /************************ On GPU ************************/
+    double *energyCUDA;
     D3<double> *cudaL;
     OrderedArray particles_ordered;
 
@@ -58,6 +60,9 @@ public:
 
         cudaMalloc(&intersectsCuda, sizeof(int));
         cudaMemset(intersectsCuda, 0, sizeof(int));
+
+        cudaMalloc(&energyCUDA, sizeof(double));
+        cudaMemset(energyCUDA, 0, sizeof(double));
     }
     ~Grid() {
         cudaFree(cudaL);
@@ -78,6 +83,9 @@ public:
     template <typename T>
     size_t cell_id(D3<T> p) const;
 
+    double get_energy() const {
+        return energy;
+    }
 
     std::vector<size_t>
     check_intersect_cpu(Particle particle, std::vector<Particle> particles);
@@ -94,6 +102,8 @@ public:
     void move(double dispmax);
     void export_to_pdb(const std::string& fn);
     void import_from_pdb(const std::string& fn);
+
+    void system_energy();
 
     std::vector<Particle> get_particles() const;
     Particle get_particle(uint id) const;

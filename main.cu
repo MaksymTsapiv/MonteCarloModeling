@@ -43,15 +43,18 @@ int main(int argc, char* argv[]) {
     auto rdf1 = compute_rdf(grid, dr, rmax);
     save_rdf_to_file(rdf1, dr, rmax, "rdf_fill.dat");
 
+//
+//    auto start_move = get_current_time_fenced();
+//    grid.move(conf.dispmax);
+//    auto finish_move = get_current_time_fenced();
+//    grid.export_to_pdb("move.pdb");
+//
+//    auto rdf2 = compute_rdf(grid, dr, rmax);
+//    save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
 
-    auto start_move = get_current_time_fenced();
-    grid.move(conf.dispmax);
-    auto finish_move = get_current_time_fenced();
-    grid.export_to_pdb("move.pdb");
-
-    auto rdf2 = compute_rdf(grid, dr, rmax);
-    save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
-
+    auto start_energy = get_current_time_fenced();
+    grid.system_energy();
+    auto finish_energy = get_current_time_fenced();
 
     //std::cout << "--------- Radial distibution function ---------" << std::endl;
     //for (auto rdf_current : rdf) {
@@ -60,7 +63,9 @@ int main(int argc, char* argv[]) {
 
 
     std::cout << "fill: " << to_us(finish_fill - start_fill) << " us\n"
-              << "move: " << to_us(finish_move - start_move) << " us"
+              /*<< "move: " << to_us(finish_move - start_move) << " us"*/
+              << "energy time: " << to_us(finish_energy - start_energy) << " us\n"
+              << "energy: " << grid.get_energy()
               << std::endl;
 
     return 0;
