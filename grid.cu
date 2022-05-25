@@ -328,14 +328,14 @@ void Grid::fill() {
 
 __global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id, size_t N) {
     int threadId = blockIdx.x * blockDim.x + threadIdx.x;
-    if (threadId > N)
+    if (threadId >= N)
         return;
     cellStartIdx[new_cell_id+1 + threadId]++;
 }
 
 __global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id, size_t N) {
     int threadId = blockIdx.x * blockDim.x + threadIdx.x;
-    if (threadId > N)
+    if (threadId >= N)
         return;
     cellStartIdx[init_cell_id+1 + threadId]--;
 }
@@ -460,7 +460,6 @@ void Grid::move(double dispmax) {
 
             if (new_p_cell_id == init_p_cell_id)
                 particles_ordered.update_particle(i.id, i);
-
             else {
                 // Cell start index in ordered array for the current particle (which is inserted)
                 uint *partCellStartIdx = new uint;
