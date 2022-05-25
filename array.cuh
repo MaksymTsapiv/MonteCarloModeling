@@ -1,9 +1,11 @@
 #ifndef MODEL_ARRAY_CUH
 #define MODEL_ARRAY_CUH
 
-#include "particle.cuh"
 #include <cuda.h>
 #include <cuda_runtime.h>
+
+#include "particle.cuh"
+#include "d3.cuh"
 
 #define INDEX_OUT_OF_RANGE 1
 
@@ -20,6 +22,7 @@ public:
     int insert(Particle value, size_t index);
     int remove(size_t index);
     int remove_by_id(size_t id);
+    int update_particle(size_t id, Particle part);
 
     const Particle* get_array();
     size_t getSize() const;

@@ -1,6 +1,8 @@
 #ifndef PARTICLE_FILE_H
 #define PARTICLE_FILE_H
 
+#define MAX_BLOCK_THREADS 512LU
+
 #include "d3.cuh"
 class Particle {
 private:

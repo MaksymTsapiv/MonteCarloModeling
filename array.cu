@@ -33,11 +33,32 @@ __global__ void get_particle_index_kernel(
         *index = threadId;
 }
 
+int OrderedArray::update_particle(size_t id, Particle part) {
+    uint *cudaIndex;
+    cudaMalloc(&cudaIndex, sizeof(uint));
+
+    int threadsPerBlock = MAX_BLOCK_THREADS;
+    size_t blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
+    get_particle_index_kernel<<<blocksPerGrid, threadsPerBlock>>>(data, id, cudaIndex, size);
+
+    uint *index = new uint;
+    cudaMemcpy(index, cudaIndex, sizeof(uint), cudaMemcpyDeviceToHost);
+
+    if (*index > size) {
+        std::cout << "INDEX OUT OF RANGE" << std::endl;
+        return INDEX_OUT_OF_RANGE;
+    }
+
+    cudaMemcpy(&data[*index], &part, sizeof(Particle), cudaMemcpyHostToDevice);
+
+    return 0;
+}
+
 int OrderedArray::remove_by_id(size_t id) {
     uint *cudaIndex;
     cudaMalloc(&cudaIndex, sizeof(uint));
 
-    int threadsPerBlock = 256;
+    int threadsPerBlock = MAX_BLOCK_THREADS;
     size_t blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
     get_particle_index_kernel<<<blocksPerGrid, threadsPerBlock>>>(data, id, cudaIndex, size);
 

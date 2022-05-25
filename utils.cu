@@ -1,5 +1,4 @@
 #include <cmath>
-#include <iostream>
 #include <fstream>
 #include "utils.cuh"
 #include "particle.cuh"
@@ -38,8 +37,6 @@ std::vector<double> compute_rdf(const Grid &grid, double dr, double rmax) {
     }
 
     auto density = grid.density();
-
-    std::cout << "Density: " << density << std::endl;
 
     for (int k = 0; k < nk; k++) {
         auto rk = k*dr;

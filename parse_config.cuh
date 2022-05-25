@@ -2,6 +2,7 @@
 #define PARSE_CONFIG_FILE_H
 
 #include <map>
+#include <string>
 
 std::map<std::string, double> parse_conf(std::ifstream &file);
 
