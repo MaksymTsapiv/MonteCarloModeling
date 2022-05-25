@@ -101,70 +101,6 @@ __device__ double device_min(double a, double b) {
     return a < b ? a : b;
 }
 
-/* TODO: Rewrite with __shared__ uint* array and using parallel summing (reduce) algorithm.
- *  It should be faster like that then atomicAdd.
- */
-__global__ void
-check_intersect (
-        const Particle *particle,
-        const Particle *ordered_particles,
-        const uint *cellStartIdx,
-        uint curr_cell_id,
-        const D3<double> *L,
-        int *intersects) {
-
-    uint startIdx = cellStartIdx[curr_cell_id];
-    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
-                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
-
-    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
-                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
-
-    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
-                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
-
-    auto dist = hypot(hypot(xd, yd), zd);
-    if (dist < particle->sigma)
-        atomicAdd(intersects, 1);
-}
-
-
-/*
- * Overload of check_intersect that accepts another argument <curr_part_id>,
- *  to ignore checking with particle with that id. This overload is used in move function
- */
-__global__ void
-check_intersect (
-        const Particle *particle,
-        const Particle *ordered_particles,
-        const uint *cellStartIdx,
-        uint curr_cell_id,
-        const D3<double> *L,
-        int *intersects,
-        uint curr_part_id) {
-
-    uint startIdx = cellStartIdx[curr_cell_id];
-    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (curr_part_id == ordered_particles[startIdx+idx].id)
-        return;
-
-    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
-                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
-
-    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
-                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
-
-    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
-                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
-
-    auto dist = hypot(hypot(xd, yd), zd);
-    if (dist < particle->sigma)
-        atomicAdd(intersects, 1);
-}
-
 std::vector<size_t>
 Grid::check_intersect_cpu(Particle particle) {
     std::vector<size_t> res;
@@ -210,9 +146,65 @@ Grid::check_intersect_cpu(Particle particle, uint req_cell_id) {
     return res;
 }
 
-__global__ void update_kernel(uint *cellStartIdx, size_t cell_idx) {
+/*
+ * Yet another oversload of check_intersect_cpu that accepts particle_id and ignores check for
+ *  intersect with that particle. Useful in move() method
+ */
+std::vector<size_t>
+Grid::check_intersect_cpu(Particle particle, uint req_cell_id, uint particle_id) {
+    std::vector<size_t> res;
+    for (Particle p: particles) {
+        auto xd = fabs(particle.x - p.x) < L.x - fabs(particle.x - p.x) ?
+                        fabs(particle.x - p.x) : L.x - fabs(particle.x - p.x);
+
+        auto yd = fabs(particle.y - p.y) < L.y - fabs(particle.y - p.y) ?
+                        fabs(particle.y - p.y) : L.y - fabs(particle.y - p.y);
+
+        auto zd = fabs(particle.z - p.z) < L.z - fabs(particle.z - p.z) ?
+                        fabs(particle.z - p.z) : L.z - fabs(particle.z - p.z);
+
+        double dist = hypot(hypot(xd, yd), zd);
+        auto this_cell_id = cell_id(get_cell(p.get_coord()));
+        if (dist < particle.sigma && this_cell_id == req_cell_id && p.id != particle_id)
+            res.push_back(p.id);
+    }
+    return res;
+}
+
+__global__ void update_kernel(uint *cellStartIdx, size_t cell_idx, size_t N) {
     int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadId > N)
+        return;
     cellStartIdx[cell_idx + threadId]++;
+}
+
+/* TODO: Rewrite with __shared__ uint* array and using parallel summing (reduce) algorithm.
+ *  It should be faster like that then atomicAdd.
+ */
+__global__ void
+check_intersect (
+        const Particle *particle,
+        const Particle *ordered_particles,
+        const uint *cellStartIdx,
+        uint curr_cell_id,
+        const D3<double> *L,
+        int *intersects) {
+
+    uint startIdx = cellStartIdx[curr_cell_id];
+    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
+                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
+
+    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
+                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
+
+    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
+                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
+
+    auto dist = hypot(hypot(xd, yd), zd);
+    if (dist < particle->sigma)
+        atomicAdd(intersects, 1);
 }
 
 void Grid::fill() {
@@ -246,6 +238,8 @@ void Grid::fill() {
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
+                    cudaMemset(intersectsCuda, 0, sizeof(int));
+
                     // TODO: do it better, without double
                     D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
                     uint curr_cell_id = cell_id(get_cell(p_point + offset));
@@ -261,17 +255,19 @@ void Grid::fill() {
 
                     int threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
                     int numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
-                    check_intersect<<<numBlocks, threadsPerBlock>>>( cuda_particle, cuda_ordered_particles,
-                                                cellStartIdx, curr_cell_id, cudaL, intersectsCuda );
+                    check_intersect<<<numBlocks, threadsPerBlock>>>(cuda_particle,
+                                                cuda_ordered_particles, cellStartIdx,
+                                                curr_cell_id, cudaL, intersectsCuda);
 
                     int *intersects = new int;
                     cudaMemcpy(intersects, intersectsCuda, sizeof(int),
                                                             cudaMemcpyDeviceToHost);
 
-                    if (*intersects > 0)
+                    if (*intersects > 0) {
                         intersected = true;
+                        break;
+                    }
 
-                    cudaMemset(intersectsCuda, 0, sizeof(int));
                     delete intersects;
                 }
                 if (intersected) break;
@@ -305,7 +301,7 @@ void Grid::fill() {
             if (N > 0) {
                 int threadsPerBlock = std::min(N, MAX_BLOCK_THREADS);
                 int numBlocks = (N + threadsPerBlock - 1) / threadsPerBlock;
-                update_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, p_cell_id+1);
+                update_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, p_cell_id+1, N);
             }
         }
         else // If a particle wasn't inserted, do not increment Particle's nextId counter
@@ -330,14 +326,52 @@ void Grid::fill() {
     std::cout << std::endl;
 }
 
-__global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id) {
+__global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id, size_t N) {
     int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadId > N)
+        return;
     cellStartIdx[new_cell_id+1 + threadId]++;
 }
 
-__global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id) {
+__global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id, size_t N) {
     int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadId > N)
+        return;
     cellStartIdx[init_cell_id+1 + threadId]--;
+}
+
+/*
+ * Overload of check_intersect that accepts another argument <curr_part_id>,
+ *  to ignore checking with particle with that id. This overload is used in move function
+ */
+__global__ void
+check_intersect (
+        const Particle *particle,
+        const Particle *ordered_particles,
+        const uint *cellStartIdx,
+        uint curr_cell_id,
+        const D3<double> *L,
+        int *intersects,
+        uint curr_part_id) {
+
+    uint startIdx = cellStartIdx[curr_cell_id];
+    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (curr_part_id == ordered_particles[startIdx+idx].id)
+        return;
+
+    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
+                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
+
+    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
+                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
+
+    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
+                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
+
+    auto dist = hypot(hypot(xd, yd), zd);
+    if (dist < particle->sigma)
+        atomicAdd(intersects, 1);
 }
 
 void Grid::move(double dispmax) {
@@ -382,6 +416,8 @@ void Grid::move(double dispmax) {
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
+                    cudaMemset(intersectsCuda, 0, sizeof(int));
+
                     // TODO: do it better, without double
                     D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
                     uint curr_cell_id = cell_id(get_cell(p_point + offset));
@@ -397,17 +433,18 @@ void Grid::move(double dispmax) {
 
                     int threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
                     int numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
-                    check_intersect<<<numBlocks, threadsPerBlock>>>(cuda_particle, cuda_ordered_particles,
-                                cellStartIdx, curr_cell_id, cudaL, intersectsCuda, curr_part_id);
+                    check_intersect<<<numBlocks, threadsPerBlock>>>(cuda_particle,
+                                cuda_ordered_particles, cellStartIdx, curr_cell_id,
+                                cudaL, intersectsCuda, curr_part_id);
 
                     int *intersects = new int;
                     cudaMemcpy(intersects, intersectsCuda, sizeof(int),
                                cudaMemcpyDeviceToHost);
 
-                    if (*intersects > 0)
+                    if (*intersects > 0) {
                         intersected = true;
-
-                    cudaMemset(intersectsCuda, 0, sizeof(int));
+                        break;
+                    }
 
                     delete intersects;
                 }
@@ -421,7 +458,10 @@ void Grid::move(double dispmax) {
             i.y = particle.y;
             i.z = particle.z;
 
-            if (new_p_cell_id != init_p_cell_id) {
+            if (new_p_cell_id == init_p_cell_id)
+                particles_ordered.update_particle(i.id, i);
+
+            else {
                 // Cell start index in ordered array for the current particle (which is inserted)
                 uint *partCellStartIdx = new uint;
                 cudaMemcpy(partCellStartIdx, &cellStartIdx[new_p_cell_id], sizeof(uint),
@@ -434,8 +474,7 @@ void Grid::move(double dispmax) {
                 if (remove_status)
                     throw std::runtime_error("Error in remove");
 
-                Particle curr_particle = i;
-                int insert_status = particles_ordered.insert(curr_particle, *partCellStartIdx);
+                int insert_status = particles_ordered.insert(i, *partCellStartIdx);
                 if (insert_status)
                     throw std::runtime_error("Error in insert");
 
@@ -445,9 +484,9 @@ void Grid::move(double dispmax) {
                 int threadsPerBlock = std::min(cells_in_range, MAX_BLOCK_THREADS);
                 int numBlocks = (cells_in_range + threadsPerBlock - 1) / threadsPerBlock;
                 if (init_p_cell_id > new_p_cell_id)
-                    backward_move_kernel<<<numBlocks, cells_in_range>>>(cellStartIdx, new_p_cell_id);
+                    backward_move_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, new_p_cell_id, cells_in_range);
                 else if (init_p_cell_id < new_p_cell_id)
-                    forward_move_kernel<<<numBlocks, cells_in_range>>>(cellStartIdx, init_p_cell_id);
+                    forward_move_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, init_p_cell_id, cells_in_range);
             }
             success++;
         }

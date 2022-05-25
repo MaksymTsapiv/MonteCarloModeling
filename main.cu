@@ -59,8 +59,11 @@ int main(int argc, char* argv[]) {
     //}
 
 
-    std::cout << "fill: " << to_us(finish_fill - start_fill) << " us\n"
+    std::cout << "fill: " << to_us(finish_fill - start_fill) << " us"
+              << "\t=  "  << to_s(finish_fill - start_fill) << " s"
+              << std::endl
               << "move: " << to_us(finish_move - start_move) << " us"
+              << "\t=  "  << to_s(finish_move - start_move) << " s"
               << std::endl;
 
     return 0;

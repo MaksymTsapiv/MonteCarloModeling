@@ -11,8 +11,6 @@
 #include "d3.cuh"
 #include "array.cuh"
 
-#define MAX_BLOCK_THREADS 512LU
-
 class Grid {
 private:
     /* Number of cells per each dimention */
@@ -93,6 +91,10 @@ public:
 
     std::vector<size_t>
     check_intersect_cpu(Particle particle, uint cell_id);
+
+    std::vector<size_t>
+    check_intersect_cpu(Particle particle, uint cell_id, uint particle_id);
+
 
     template <typename T>
     uint cell_at_offset(D3<uint> init_cell, D3<T> offset) const;
