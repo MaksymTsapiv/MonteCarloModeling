@@ -26,15 +26,20 @@ private:
 
     /* number of cells in system */
     size_t n_cells = 0;
+    double energy = 0;
 
     /* Grid particle's sigma -- diameter */
     double p_sigma = 1.0;
 
     /************************ On GPU ************************/
+
     D3<double> *cudaL;
     OrderedArray particles_ordered;
 
-    // Helper boolean array, needed in kernel funciton during intersection check
+    /* Helper double that stores cell energy. Use in kernel; copied from CUDA to CPU */
+    double *energyCuda;
+
+    /* Helper boolean array, needed in kernel funciton during intersection check */
     int *intersectsCuda;
 
     uint *cellStartIdx;
@@ -64,6 +69,9 @@ public:
         cudaMalloc(&intersectsCuda, sizeof(int));
         cudaMemset(intersectsCuda, 0, sizeof(int));
 
+        cudaMalloc(&energyCuda, sizeof(double));
+        cudaMemset(energyCuda, 0, sizeof(double));
+
         print_grid_info();
     }
     ~Grid() {
@@ -85,6 +93,9 @@ public:
     template <typename T>
     size_t cell_id(D3<T> p) const;
 
+    double get_energy() const {
+        return energy;
+    }
 
     std::vector<size_t>
     check_intersect_cpu(Particle particle);
@@ -122,6 +133,8 @@ public:
      * dimention and grid size are set
      */
     void import_from_cf(const std::string& fn);
+
+    void system_energy();
 
     std::vector<Particle> get_particles() const;
     Particle get_particle(uint id) const;

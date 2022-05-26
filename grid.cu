@@ -461,6 +461,108 @@ void Grid::move(double dispmax) {
     std::cout << success << " moved" << std::endl;
 }
 
+__device__ inline void AtomicAdd(double* address, double value) {
+    double old = value;
+    double new_old;
+
+    do {
+        new_old = atomicExch(reinterpret_cast<float *>(address), 0.0f);
+        new_old += old;
+    }
+    while ((old = atomicExch(reinterpret_cast<float *>(address), new_old)) != 0.0f);
+}
+
+
+__global__ void calc_energy(double* energy, const Particle* particle, const Particle *particles,
+                            const uint *cellStartIdx, uint curr_cell_id, const D3<double> *L,
+                            uint curr_part_id, size_t partInCell) {
+
+    extern __shared__ double part_energy[];
+
+    const double sqe = -1.0;
+    const double sqw = 0.2;
+    const double inf = 0x7f800000;
+
+    uint startIdx = cellStartIdx[curr_cell_id];
+    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    auto xd = device_min( fabs(particle->x - particles[startIdx+idx].x),
+                          L->x - fabs(particle->x - particles[startIdx+idx].x) );
+
+    auto yd = device_min( fabs(particle->y - particles[startIdx+idx].y),
+                          L->y - fabs(particle->y - particles[startIdx+idx].y) );
+
+    auto zd = device_min( fabs(particle->z - particles[startIdx+idx].z),
+                          L->z - fabs(particle->z - particles[startIdx+idx].z) );
+
+    auto dist = hypot(hypot(xd, yd), zd);
+
+    if ((dist >= particle->sigma) && (dist < particle->sigma + sqw))
+        part_energy[idx] = sqe;
+    else if (dist < particle->sigma) {
+        if (curr_part_id == particles[startIdx+idx].id)
+            part_energy[idx] = 0.0;
+        else {
+            part_energy[idx] = inf;
+            printf("Error, intersected. %lu with %lu -- dist = %f\n",
+                            particle->id, particles[startIdx+idx].id, dist);
+        }
+    }
+    else
+        part_energy[idx] = 0;
+
+    __syncthreads();
+
+    for (auto i = blockDim.x/2; i > 0; i/=2) {
+        if (idx < i)
+            part_energy[idx] += part_energy[idx + i];
+        __syncthreads();
+    }
+
+    if (idx == 0)
+        *energy = part_energy[0];
+}
+
+void Grid::system_energy() {
+    energy = 0;
+
+    for (auto &particle: particles) {
+        auto curr_part_id = particle.id;
+        D3<double> p_point = particle.get_coord();
+
+        Particle *cuda_particle;
+        cudaMalloc(&cuda_particle, sizeof(Particle));
+        cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
+
+        const Particle *cuda_ordered_particles = particles_ordered.get_array();
+        for (auto z_off = -1; z_off <= 1; ++z_off) {
+            for (auto y_off = -1; y_off <= 1; ++y_off) {
+                for (auto x_off = -1; x_off <= 1; ++x_off) {
+                    D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
+                    uint curr_cell_id = cell_id(get_cell(p_point + offset));
+
+                    size_t partInCell = partPerCell[curr_cell_id];
+
+                    if (partInCell == 0)
+                        continue;
+
+                    calc_energy<<<1, partInCell, partInCell*sizeof(double)>>>(energyCuda, cuda_particle,
+                                        cuda_ordered_particles, cellStartIdx, curr_cell_id,
+                                        cudaL, curr_part_id, partInCell);
+
+                    auto* en = new double;
+                    cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
+                    cudaMemset(energyCuda, 0, sizeof(double));
+
+                    energy += *en;
+                    delete en;
+                }
+            }
+        }
+    }
+}
+
+
 enum paramsMLen{
     TYPE_MLEN = 6, SN_MLEN = 5, NAME_MLEN = 4, ALT_LOC_IND_MLEN = 1, RES_NAME_MLEN = 3,
     CHAIN_IND_MLEN = 1, RES_SEQ_NUM_MLEN = 4, RES_INS_CODE_MLEN = 1,

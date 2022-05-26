@@ -38,20 +38,33 @@ int main(int argc, char* argv[]) {
     grid.fill();
     auto finish_fill = get_current_time_fenced();
     grid.export_to_pdb("fill.pdb");
+    grid.export_to_cf("fill.cf");
 
     auto rdf1 = compute_rdf(grid, dr, rmax);
     save_rdf_to_file(rdf1, dr, rmax, "rdf_fill.dat");
+
+    grid.system_energy();
+    std::cout << "energy1 = " << grid.get_energy() << std::endl;
 
 
     auto start_move = get_current_time_fenced();
     grid.move(conf.dispmax);
     auto finish_move = get_current_time_fenced();
-
     grid.export_to_pdb("move.pdb");
     grid.export_to_cf("move.cf");
 
     auto rdf2 = compute_rdf(grid, dr, rmax);
     save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
+
+    auto start_energy = get_current_time_fenced();
+    grid.system_energy();
+    auto finish_energy = get_current_time_fenced();
+
+    std::cout << "energy2 = " << grid.get_energy() << std::endl;
+
+
+    grid.system_energy();
+
 
 
     std::cout << "fill: " << to_us(finish_fill - start_fill) << " us"
@@ -59,6 +72,9 @@ int main(int argc, char* argv[]) {
               << std::endl;
     std::cout << "move: " << to_us(finish_move - start_move) << " us"
               << "\t=  "  << to_s(finish_move - start_move) << " s"
+              << std::endl;
+    std::cout << "energy: " << to_us(finish_energy - start_energy) << " us"
+              << "\t=  "  << to_s(finish_energy - start_energy) << " s"
               << std::endl;
 
     return 0;
