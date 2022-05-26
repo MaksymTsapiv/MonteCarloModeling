@@ -429,8 +429,7 @@ __device__ inline void AtomicAdd(double* address, double value) {
     double old = value;
     double new_old;
 
-    do
-    {
+    do {
         new_old = atomicExch(reinterpret_cast<float *>(address), 0.0f);
         new_old += old;
     }
@@ -438,8 +437,12 @@ __device__ inline void AtomicAdd(double* address, double value) {
 }
 
 
-__global__ void calc_energy(double* energy, const Particle* particle, const Particle *ordered_particles,
-                            const uint *cellStartIdx, uint curr_cell_id, const D3<double> *L, uint curr_part_id) {
+__global__ void calc_energy(double* energy, const Particle* particle, const Particle *particles,
+                            const uint *cellStartIdx, uint curr_cell_id, const D3<double> *L,
+                            uint curr_part_id, size_t partInCell) {
+
+    __shared__ double *part_energy;
+    part_energy = (double *) malloc(partInCell);
 
     const double sqe = -1.0;
     const double sqw = 0.2;
@@ -448,26 +451,42 @@ __global__ void calc_energy(double* energy, const Particle* particle, const Part
     uint startIdx = cellStartIdx[curr_cell_id];
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (curr_part_id == ordered_particles[startIdx+idx].id)
+    if (curr_part_id == particles[startIdx+idx].id)
         return;
 
-    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
-                          L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
+    auto xd = device_min( fabs(particle->x - particles[startIdx+idx].x),
+                          L->x - fabs(particle->x - particles[startIdx+idx].x) );
 
-    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
-                          L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
+    auto yd = device_min( fabs(particle->y - particles[startIdx+idx].y),
+                          L->y - fabs(particle->y - particles[startIdx+idx].y) );
 
-    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
-                          L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
+    auto zd = device_min( fabs(particle->z - particles[startIdx+idx].z),
+                          L->z - fabs(particle->z - particles[startIdx+idx].z) );
 
     auto dist = hypot(hypot(xd, yd), zd);
 
-    if ((dist >= particle->sigma) && (dist < particle->sigma + sqw)) {
-        AtomicAdd(energy, sqe);
-    } else {
-        if (dist < particle->sigma)
-            AtomicAdd(energy, inf);
+    if ((dist >= particle->sigma) && (dist < particle->sigma + sqw))
+        part_energy[idx] = sqe; 
+    else if (dist < particle->sigma) {
+        part_energy[idx] = inf;
+        printf("Error, looks like particles have intersected!!!\n");
     }
+    else
+        part_energy[idx] = 0;
+
+    __syncthreads();
+
+    printf("%i: %f\n", idx, part_energy[idx]);
+
+    for (long i = blockDim.x/2; i > 0; i >>= 1) {
+        if (idx < i)
+            part_energy[idx] += part_energy[idx + i];
+        __syncthreads();
+    }
+
+    __syncthreads();
+    if (idx == 0)
+        *energy = part_energy[0];
 }
 
 void Grid::system_energy() {
@@ -476,6 +495,12 @@ void Grid::system_energy() {
     for (auto &particle: particles) {
         auto curr_part_id = particle.id;
         D3<double> p_point = particle.get_coord();
+
+        Particle *cuda_particle;
+        cudaMalloc(&cuda_particle, sizeof(Particle));
+        cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
+
+        const Particle *cuda_ordered_particles = particles_ordered.get_array();
 
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
@@ -489,18 +514,13 @@ void Grid::system_energy() {
                     if (partInCell == 0)
                         continue;
 
-                    Particle *cuda_particle;
-                    cudaMalloc(&cuda_particle, sizeof(Particle));
-                    cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
-
-                    const Particle *cuda_ordered_particles = particles_ordered.get_array();
-
-                    calc_energy<<<1, partInCell>>>(energyCUDA, cuda_particle, cuda_ordered_particles,
-                                                   cellStartIdx, curr_cell_id, cudaL, curr_part_id);
+                    calc_energy<<<1, partInCell>>>(energyCuda, cuda_particle,
+                                        cuda_ordered_particles, cellStartIdx, curr_cell_id,
+                                        cudaL, curr_part_id, partInCell);
 
                     auto* en = new double;
-                    cudaMemcpy(en, energyCUDA, sizeof(double),cudaMemcpyDeviceToHost);
-                    cudaMemset(energyCUDA, 0, sizeof(double));
+                    cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
+                    cudaMemset(energyCuda, 0, sizeof(double));
 
                     energy += *en;
                     delete en;

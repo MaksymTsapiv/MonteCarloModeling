@@ -26,11 +26,14 @@ private:
     double energy = 0;
 
     /************************ On GPU ************************/
-    double *energyCUDA;
+
     D3<double> *cudaL;
     OrderedArray particles_ordered;
 
-    // Helper boolean array, needed in kernel funciton during intersection check
+    /* Helper double that stores cell energy. Use in kernel; copied from CUDA to CPU */
+    double *energyCuda;
+
+    /* Helper boolean array, needed in kernel funciton during intersection check */
     int *intersectsCuda;
 
     uint *cellStartIdx;
@@ -61,8 +64,8 @@ public:
         cudaMalloc(&intersectsCuda, sizeof(int));
         cudaMemset(intersectsCuda, 0, sizeof(int));
 
-        cudaMalloc(&energyCUDA, sizeof(double));
-        cudaMemset(energyCUDA, 0, sizeof(double));
+        cudaMalloc(&energyCuda, sizeof(double));
+        cudaMemset(energyCuda, 0, sizeof(double));
     }
     ~Grid() {
         cudaFree(cudaL);
