@@ -441,8 +441,7 @@ __global__ void calc_energy(double* energy, const Particle* particle, const Part
                             const uint *cellStartIdx, uint curr_cell_id, const D3<double> *L,
                             uint curr_part_id, size_t partInCell) {
 
-    __shared__ double *part_energy;
-    part_energy = (double *) malloc(partInCell);
+    extern __shared__ double part_energy[];
 
     const double sqe = -1.0;
     const double sqw = 0.2;
@@ -450,9 +449,6 @@ __global__ void calc_energy(double* energy, const Particle* particle, const Part
 
     uint startIdx = cellStartIdx[curr_cell_id];
     uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (curr_part_id == particles[startIdx+idx].id)
-        return;
 
     auto xd = device_min( fabs(particle->x - particles[startIdx+idx].x),
                           L->x - fabs(particle->x - particles[startIdx+idx].x) );
@@ -466,25 +462,27 @@ __global__ void calc_energy(double* energy, const Particle* particle, const Part
     auto dist = hypot(hypot(xd, yd), zd);
 
     if ((dist >= particle->sigma) && (dist < particle->sigma + sqw))
-        part_energy[idx] = sqe; 
+        part_energy[idx] = sqe;
     else if (dist < particle->sigma) {
-        part_energy[idx] = inf;
-        printf("Error, looks like particles have intersected!!!\n");
+        if (curr_part_id == particles[startIdx+idx].id)
+            part_energy[idx] = 0.0;
+        else {
+            part_energy[idx] = inf;
+            printf("Error, intersected. %lu with %lu -- dist = %f\n",
+                            particle->id, particles[startIdx+idx].id, dist);
+        }
     }
     else
         part_energy[idx] = 0;
 
     __syncthreads();
 
-    printf("%i: %f\n", idx, part_energy[idx]);
-
-    for (long i = blockDim.x/2; i > 0; i >>= 1) {
+    for (auto i = blockDim.x/2; i > 0; i/=2) {
         if (idx < i)
             part_energy[idx] += part_energy[idx + i];
         __syncthreads();
     }
 
-    __syncthreads();
     if (idx == 0)
         *energy = part_energy[0];
 }
@@ -501,11 +499,9 @@ void Grid::system_energy() {
         cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
 
         const Particle *cuda_ordered_particles = particles_ordered.get_array();
-
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
-
                     D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
                     uint curr_cell_id = cell_id(get_cell(p_point + offset));
 
@@ -514,7 +510,7 @@ void Grid::system_energy() {
                     if (partInCell == 0)
                         continue;
 
-                    calc_energy<<<1, partInCell>>>(energyCuda, cuda_particle,
+                    calc_energy<<<1, partInCell, partInCell*sizeof(double)>>>(energyCuda, cuda_particle,
                                         cuda_ordered_particles, cellStartIdx, curr_cell_id,
                                         cudaL, curr_part_id, partInCell);
 
