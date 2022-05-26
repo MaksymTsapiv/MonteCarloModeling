@@ -342,7 +342,7 @@ void Grid::move(double dispmax) {
     uint success = 0;
 
     for (size_t j = 0; j < n; j++) {
-        auto i = particles[random_int(0, n-1)];
+        auto &i = particles[random_int(0, n-1)];
 
         auto curr_part_id = i.id;
 
@@ -448,10 +448,14 @@ void Grid::move(double dispmax) {
 
                 int threadsPerBlock = std::min(cells_in_range, MAX_BLOCK_THREADS);
                 int numBlocks = (cells_in_range + threadsPerBlock - 1) / threadsPerBlock;
+
                 if (init_p_cell_id > new_p_cell_id)
-                    backward_move_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, new_p_cell_id, cells_in_range);
+                    backward_move_kernel<<<numBlocks, threadsPerBlock>>>
+                                (cellStartIdx, new_p_cell_id, cells_in_range);
+
                 else if (init_p_cell_id < new_p_cell_id)
-                    forward_move_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, init_p_cell_id, cells_in_range);
+                    forward_move_kernel<<<numBlocks, threadsPerBlock>>>
+                                (cellStartIdx, init_p_cell_id, cells_in_range);
             }
             success++;
         }
@@ -461,21 +465,9 @@ void Grid::move(double dispmax) {
     std::cout << success << " moved" << std::endl;
 }
 
-__device__ inline void AtomicAdd(double* address, double value) {
-    double old = value;
-    double new_old;
-
-    do {
-        new_old = atomicExch(reinterpret_cast<float *>(address), 0.0f);
-        new_old += old;
-    }
-    while ((old = atomicExch(reinterpret_cast<float *>(address), new_old)) != 0.0f);
-}
-
-
-__global__ void calc_energy(double* energy, const Particle* particle, const Particle *particles,
-                            const uint *cellStartIdx, uint curr_cell_id, const D3<double> *L,
-                            uint curr_part_id, size_t partInCell) {
+__global__ void energy_single_kernel(double* energy, const Particle* particle,
+                        const Particle *particles, const uint *cellStartIdx, uint curr_cell_id,
+                        const D3<double> *L, uint curr_part_id, size_t partInCell) {
 
     extern __shared__ double part_energy[];
 
@@ -504,8 +496,8 @@ __global__ void calc_energy(double* energy, const Particle* particle, const Part
             part_energy[idx] = 0.0;
         else {
             part_energy[idx] = inf;
-            printf("Error, intersected. %lu with %lu -- dist = %f\n",
-                            particle->id, particles[startIdx+idx].id, dist);
+            printf("Error, intersected. %lu with %lu (cell %i) -- dist = %f\n",
+                            particle->id, particles[startIdx+idx].id, curr_cell_id, dist);
         }
     }
     else
@@ -546,9 +538,9 @@ void Grid::system_energy() {
                     if (partInCell == 0)
                         continue;
 
-                    calc_energy<<<1, partInCell, partInCell*sizeof(double)>>>(energyCuda, cuda_particle,
-                                        cuda_ordered_particles, cellStartIdx, curr_cell_id,
-                                        cudaL, curr_part_id, partInCell);
+                    energy_single_kernel<<<1, partInCell, partInCell*sizeof(double)>>>(energyCuda,
+                            cuda_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
+                            cudaL, curr_part_id, partInCell);
 
                     auto* en = new double;
                     cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
@@ -681,8 +673,8 @@ void Grid::export_to_pdb(const std::string& fn) {
         const std::string sort_of_elem = std::to_string(1);
         const std::string temp_factor = focctemp(0);
 
-        ::export_to_pdb(fn, particle_type, std::to_string(serial_num), atom_name, "", "", "", sort_of_elem, "",
-                fcoord(particle.x), fcoord(particle.y), fcoord(particle.z),
+        ::export_to_pdb(fn, particle_type, std::to_string(serial_num), atom_name, "", "", "",
+                sort_of_elem, "", fcoord(particle.x), fcoord(particle.y), fcoord(particle.z),
                 focctemp(particle.sigma), temp_factor, "", "", "");
         serial_num++;
     }
