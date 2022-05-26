@@ -172,7 +172,7 @@ Grid::check_intersect_cpu(Particle particle, uint req_cell_id, uint particle_id)
 }
 
 __global__ void update_kernel(uint *cellStartIdx, size_t cell_idx, size_t N) {
-    int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
     if (threadId > N)
         return;
     cellStartIdx[cell_idx + threadId]++;
@@ -225,7 +225,6 @@ void Grid::fill() {
 
         D3<double> p_point = particle.get_coord();
         D3<int> p_cell = get_cell(p_point);
-        uint p_cell_id = cell_id(p_cell);
 
         bool intersected = false;
 
@@ -247,8 +246,8 @@ void Grid::fill() {
 
                     const Particle *cuda_ordered_particles = particles_ordered.get_array();
 
-                    int threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
-                    int numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
+                    size_t threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
+                    size_t numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
                     check_intersect<<<numBlocks, threadsPerBlock>>>(cuda_particle,
                                                 cuda_ordered_particles, cellStartIdx,
                                                 curr_cell_id, cudaL, intersectsCuda);
@@ -291,14 +290,14 @@ void Grid::fill() {
 }
 
 __global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id, size_t N) {
-    int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
     if (threadId >= N)
         return;
     cellStartIdx[new_cell_id+1 + threadId]++;
 }
 
 __global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id, size_t N) {
-    int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
     if (threadId >= N)
         return;
     cellStartIdx[init_cell_id+1 + threadId]--;
@@ -397,8 +396,8 @@ void Grid::move(double dispmax) {
 
                     const Particle *cuda_ordered_particles = particles_ordered.get_array();
 
-                    int threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
-                    int numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
+                    size_t threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
+                    size_t numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
                     check_intersect<<<numBlocks, threadsPerBlock>>>(cuda_particle,
                                 cuda_ordered_particles, cellStartIdx, curr_cell_id,
                                 cudaL, intersectsCuda, curr_part_id);
@@ -446,8 +445,8 @@ void Grid::move(double dispmax) {
                 size_t cells_in_range = init_p_cell_id > new_p_cell_id ?
                             init_p_cell_id - new_p_cell_id : new_p_cell_id - init_p_cell_id;
 
-                int threadsPerBlock = std::min(cells_in_range, MAX_BLOCK_THREADS);
-                int numBlocks = (cells_in_range + threadsPerBlock - 1) / threadsPerBlock;
+                size_t threadsPerBlock = std::min(cells_in_range, MAX_BLOCK_THREADS);
+                size_t numBlocks = (cells_in_range + threadsPerBlock - 1) / threadsPerBlock;
 
                 if (init_p_cell_id > new_p_cell_id)
                     backward_move_kernel<<<numBlocks, threadsPerBlock>>>
@@ -504,6 +503,10 @@ __global__ void energy_single_kernel(double* energy, const Particle* particle,
         part_energy[idx] = 0;
 
     __syncthreads();
+
+//    for (auto i = 0; i < ceil(log2(partInCell)); ++i) {
+//        part_energy[partInCell + i] = 0;
+//    }
 
     for (auto i = blockDim.x/2; i > 0; i/=2) {
         if (idx < i)
@@ -737,8 +740,8 @@ void Grid::complex_insert(Particle p) {
 
     size_t N = n_cells-p_cell_id-1;
     if (N > 0) {
-        int threadsPerBlock = std::min(N, MAX_BLOCK_THREADS);
-        int numBlocks = (N + threadsPerBlock - 1) / threadsPerBlock;
+        size_t threadsPerBlock = std::min(N, MAX_BLOCK_THREADS);
+        size_t numBlocks = (N + threadsPerBlock - 1) / threadsPerBlock;
         update_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, p_cell_id+1, N);
     }
 
