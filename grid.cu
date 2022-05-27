@@ -502,11 +502,10 @@ __global__ void energy_single_kernel(double* energy, const Particle* particle,
     else
         part_energy[idx] = 0;
 
-    __syncthreads();
+    if (idx+partInCell < arr_size)
+        part_energy[idx+partInCell] = 0;
 
-    for (auto i = partInCell; i < arr_size; ++i) {
-        part_energy[i] = 0;
-    }
+    __syncthreads();
 
     for (auto i = arr_size/2; i > 0; i/=2) {
         if (idx < i)
