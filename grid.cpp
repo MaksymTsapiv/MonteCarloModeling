@@ -194,7 +194,10 @@ void Grid::move(double dispmax) {
         if (y < 0) y += Ly;
         if (z < 0) z += Lz;
 
-        for (auto &cell : cells) {
+        auto p_cell = get_cell(particle);
+        auto p_cell_id = get_cell_id(p_cell.x, p_cell.y, p_cell.z);
+        for (auto cell_id : adj_cells[p_cell_id]) {
+            Cell cell = cells[cell_id];
             bool exit = false;
             for (auto pid : cell.get_particles()) {
                 if (get_particle(pid).get_id() == particle.get_id())
