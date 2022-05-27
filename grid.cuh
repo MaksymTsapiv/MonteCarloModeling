@@ -29,7 +29,9 @@ private:
     double energy = 0;
 
     /* Grid particle's sigma -- diameter */
-    double p_sigma = 1.0;
+    const double p_sigma = 1.0;
+    const double temp = 0.5;
+    const double beta = 1.0/temp;
 
     /************************ On GPU ************************/
 
