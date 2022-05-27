@@ -3,7 +3,7 @@
 #include <map>
 #include <string>
 #include <algorithm>
-#include "parse_config.h"
+#include "parse_config.cuh"
 
 
 std::map<std::string, double> parse_conf(std::ifstream &file) {
@@ -27,6 +27,8 @@ Config Config::from_map(std::map<std::string, double> &config) {
     conf.Lx = config["Lx"];
     conf.Ly = config["Ly"];
     conf.Lz = config["Lz"];
+    conf.dispmax = config["dispmax"];
+    conf.N_cells = static_cast<uint>(config["N_cells"]);
     conf.N = static_cast<size_t>(config["N"]);
     return conf;
 }

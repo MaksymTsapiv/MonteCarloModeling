@@ -223,6 +223,8 @@ StyleCopReport.xml
 *.meta
 *.iobj
 *.pdb
+*.dat
+*.cf
 *.ipdb
 *.pgc
 *.pgd
