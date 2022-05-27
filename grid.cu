@@ -466,7 +466,7 @@ void Grid::move(double dispmax) {
 
 __global__ void energy_single_kernel(double* energy, const Particle* particle,
                         const Particle *particles, const uint *cellStartIdx, uint curr_cell_id,
-                        const D3<double> *L, uint curr_part_id, size_t partInCell) {
+                        const D3<double> *L, uint curr_part_id, size_t partInCell, size_t arr_size) {
 
     extern __shared__ double part_energy[];
 
@@ -504,11 +504,11 @@ __global__ void energy_single_kernel(double* energy, const Particle* particle,
 
     __syncthreads();
 
-//    for (auto i = 0; i < ceil(log2(partInCell)); ++i) {
-//        part_energy[partInCell + i] = 0;
-//    }
+    for (auto i = partInCell; i < arr_size; ++i) {
+        part_energy[i] = 0;
+    }
 
-    for (auto i = blockDim.x/2; i > 0; i/=2) {
+    for (auto i = arr_size/2; i > 0; i/=2) {
         if (idx < i)
             part_energy[idx] += part_energy[idx + i];
         __syncthreads();
@@ -540,10 +540,10 @@ void Grid::system_energy() {
 
                     if (partInCell == 0)
                         continue;
-
-                    energy_single_kernel<<<1, partInCell, partInCell*sizeof(double)>>>(energyCuda,
+                    size_t arr_size = pow(2, ceil(log2(partInCell)));
+                    energy_single_kernel<<<1, partInCell, arr_size*sizeof(double)>>>(energyCuda,
                             cuda_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
-                            cudaL, curr_part_id, partInCell);
+                            cudaL, curr_part_id, partInCell, arr_size);
 
                     auto* en = new double;
                     cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
