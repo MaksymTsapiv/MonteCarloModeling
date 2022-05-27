@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
     grid.export_to_pdb("move.pdb");
     grid.export_to_cf("move.cf");
 
-    auto rdf2 = compute_rdf(grid, dr, rmax);
+    auto rdf2 = compute_rdf(grid, dr, rmax, rdf1);
     save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
 
     auto start_energy = get_current_time_fenced();

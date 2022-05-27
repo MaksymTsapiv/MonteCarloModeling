@@ -40,10 +40,25 @@ std::vector<double> compute_rdf(const Grid &grid, double dr, double rmax) {
 
     for (int k = 0; k < nk; k++) {
         auto rk = k*dr;
-        rdf[k] = rdf[k] / ( 4.0/3.0 * M_PI * (pow(rk+dr, 3) - pow(rk, 3)) * density);
+        rdf[k] = rdf[k] / ( 2.0/3.0 * M_PI * (pow(rk+dr, 3) - pow(rk, 3))) / n_parts / density;
     }
 
     return rdf;
+}
+
+std::vector<double> compute_rdf(const Grid &grid, double dr, double rmax,
+                                const std::vector<double> &rdf_prev) {
+
+    auto rdf_this = compute_rdf(grid, dr, rmax);
+
+    if (rdf_this.size() != rdf_prev.size())
+        throw std::runtime_error("Error, number of entries in previous vector of RDF values and\
+                current vector of RDF values are not the same.");
+
+    for (size_t i = 0; i < rdf_this.size(); i++)
+        rdf_this[i] = (rdf_this[i]+rdf_prev[i])/2;
+
+    return rdf_this;
 }
 
 void save_rdf_to_file(std::vector<double> rdf, double dr, double rmax, std::string filename) {
