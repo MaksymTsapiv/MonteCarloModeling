@@ -63,10 +63,6 @@ int main(int argc, char* argv[]) {
     std::cout << "energy2 = " << grid.get_energy() << std::endl;
 
 
-    grid.system_energy();
-
-
-
     std::cout << "fill: " << to_us(finish_fill - start_fill) << " us"
               << "\t=  "  << to_s(finish_fill - start_fill) << " s"
               << std::endl;

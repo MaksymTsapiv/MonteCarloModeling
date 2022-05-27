@@ -438,6 +438,8 @@ void Grid::move(double dispmax) {
         bool intersected = false;
         bool accept = false;
 
+        double init_en_total = 0;
+        double new_en_total = 0;
         for (auto z_off = -1; z_off <= 1; ++z_off) {
             for (auto y_off = -1; y_off <= 1; ++y_off) {
                 for (auto x_off = -1; x_off <= 1; ++x_off) {
@@ -470,26 +472,30 @@ void Grid::move(double dispmax) {
                                                                                      cuda_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
                                                                                      cudaL, curr_part_id, partInCell, arr_size);
 
+                    init_en_total += *init_en;
+
                     auto* en = new double;
                     cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
                     cudaMemset(energyCuda, 0, sizeof(double));
-
-                    auto delta_en = *en - *init_en;
-                    if (delta_en < 0) {
-                        accept = true;
-                    } else {
-                        if ((double) rand() / RAND_MAX < exp(-beta * delta_en))
-                            accept = true;
-                    }
 
                     if (*en > 0) {
                         intersected = true;
                         break;
                     }
+
+                    new_en_total += *en;
                 }
                 if (intersected) break;
             }
             if (intersected) break;
+        }
+
+        auto delta_en = init_en_total - new_en_total;
+        if (delta_en < 0) {
+            accept = true;
+        } else {
+            if ((double) rand() / RAND_MAX < exp(-beta * delta_en))
+                accept = true;
         }
 
         if (!intersected && accept) {
