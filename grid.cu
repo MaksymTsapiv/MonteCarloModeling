@@ -504,6 +504,8 @@ void Grid::move(double dispmax) {
         for (uint i = 0; i < n_adj_cells; i++)
             preEnergy += preEnergies[i];
 
+        delete[] preEnergies;
+
 
         energy_all_cell_kernel<<<n_adj_cells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
                         (energiesCuda, particle, partPerCellCuda, particles_ordered.get_array(),
@@ -515,6 +517,8 @@ void Grid::move(double dispmax) {
         double postEnergy = 0.0;
         for (uint i = 0; i < n_adj_cells; i++)
             postEnergy += postEnergies[i];
+
+        delete[] postEnergies;
 
         if (postEnergy > 0)
             intersected = true;
@@ -568,6 +572,8 @@ void Grid::move(double dispmax) {
                 else if (init_p_cell_id < new_p_cell_id)
                     forward_move_kernel<<<numBlocks, threadsPerBlock>>>
                                 (cellStartIdx, init_p_cell_id, cells_in_range);
+
+                delete partCellStartIdx;
             }
             success++;
         }
@@ -579,39 +585,22 @@ void Grid::system_energy() {
     energy = 0;
 
     for (auto &particle: particles) {
-        auto curr_part_id = particle.id;
         D3<double> p_point = particle.get_coord();
+        auto pCellId = cell_id(get_cell(p_point));
 
-        Particle *cuda_particle;
-        cudaMalloc(&cuda_particle, sizeof(Particle));
-        cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
+        energy_all_cell_kernel<<<n_adj_cells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
+                        (energiesCuda, particle, partPerCellCuda, particles_ordered.get_array(),
+                         cellStartIdx, cudaL, cnCuda, pCellId);
 
-        const Particle *cuda_ordered_particles = particles_ordered.get_array();
-        for (auto z_off = -1; z_off <= 1; ++z_off) {
-            for (auto y_off = -1; y_off <= 1; ++y_off) {
-                for (auto x_off = -1; x_off <= 1; ++x_off) {
-                    D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
-                    uint curr_cell_id = cell_id(get_cell(p_point + offset));
+        double *energies = new double[n_adj_cells];
+        cudaMemcpy(energies, energiesCuda, sizeof(double) * n_adj_cells, cudaMemcpyDeviceToHost);
 
-                    size_t partInCell = partPerCell[curr_cell_id];
+        for (uint i = 0; i < n_adj_cells; i++)
+            energy += energies[i];
 
-                    if (partInCell == 0)
-                        continue;
-                    size_t arr_size = pow(2, ceil(log2(partInCell)));
-                    energy_single_kernel<<<1, partInCell, arr_size*sizeof(double)>>>(energiesCuda,
-                            cuda_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
-                            cudaL, curr_part_id, partInCell, arr_size);
-
-                    auto* en = new double;
-                    cudaMemcpy(en, energiesCuda, sizeof(double), cudaMemcpyDeviceToHost);
-                    cudaMemset(energiesCuda, 0, sizeof(double));
-
-                    energy += *en;
-                    delete en;
-                }
-            }
-        }
+        delete[] energies;
     }
+    energy /= 2.0;
 }
 
 
@@ -802,7 +791,7 @@ void Grid::complex_insert(Particle p) {
         update_kernel<<<numBlocks, threadsPerBlock>>>(cellStartIdx, p_cell_id+1, N);
     }
 
-    free(partCellStartIdx);
+    delete partCellStartIdx;
 }
 
 
