@@ -12,17 +12,18 @@
 #include "array.cuh"
 
 constexpr double SPHERE_PACK_COEFF = 0.9069;
+constexpr uint nAdjCells = 27;    // Number of neighbouring cells
 
-struct CELLN { 
-    uint ic[27];    // id of cell
+struct AdjCells { 
+    uint ac[nAdjCells];    // id of cell
 };
 
 
 class Grid {
 private:
     /* Number of cells per each dimention */
-    D3<uint> dim_cells {0};
-    D3<double> cell_size {0.0};
+    D3<uint> dimCells {0};
+    D3<double> cellSize {0.0};
     std::vector<Particle> particles{};
 
     /* Number of particles in each cell */
@@ -38,22 +39,19 @@ private:
     double energy = 0;
 
     /* Grid particle's sigma -- diameter */
-    const double p_sigma = 1.0;
+    const double pSigma = 1.0;
     const double temp = 0.5;
     const double beta = 1.0/temp;
 
-    /* Number of adjacent cells for a cell */
-    const uint n_adj_cells = 27;
-
-    CELLN *cn;
+    AdjCells *cn;
 
     /************************ On GPU ************************/
 
-    CELLN *cnCuda;
+    AdjCells *cnCuda;
     uint *partPerCellCuda;
 
     D3<double> *cudaL;
-    OrderedArray particles_ordered;
+    OrderedArray orderedParticlesCuda;
 
     /* Helper array of 27 doubles that stores cells energy for all adjacent cells */
     double *energiesCuda;
@@ -61,20 +59,20 @@ private:
     /* Helper boolean array, needed in kernel funciton during intersection check */
     int *intersectsCuda;
 
-    uint *cellStartIdx;
+    uint *cellStartIdxCuda;
     /********************************************************/
 
 public:
     Grid(double x, double y, double z, D3<uint> dim_cells_, size_t n_particles) :
-        particles_ordered(n_particles), n(n_particles), dim_cells{dim_cells_}
+        orderedParticlesCuda(n_particles), n(n_particles), dimCells{dim_cells_}
     {
         L = D3<double>{x, y, z};
-        cell_size = D3<double>{L.x / dim_cells.x, L.y / dim_cells.y, L.z / dim_cells.z};
+        cellSize = D3<double>{L.x / dimCells.x, L.y / dimCells.y, L.z / dimCells.z};
 
-        if (cell_size.x < 1.0 || cell_size.y < 1.0 || cell_size.z < 1.0)
+        if (cellSize.x < 1.0 || cellSize.y < 1.0 || cellSize.z < 1.0)
             throw std::runtime_error("Cell size is less than 1.0, e.g. smaller than particle size");
 
-        n_cells = dim_cells.x * dim_cells.y * dim_cells.z;
+        n_cells = dimCells.x * dimCells.y * dimCells.z;
 
         cudaMalloc(&cudaL, sizeof(D3<double>));
         cudaMemcpy(cudaL, &L, sizeof(D3<double>), cudaMemcpyHostToDevice);
@@ -82,25 +80,25 @@ public:
         partPerCell = new uint[n_cells];
         memset(partPerCell, 0, sizeof(uint) * n_cells);
 
-        maxPartPerCell = SPHERE_PACK_COEFF * (3.0 * cell_size.x*cell_size.y*cell_size.z)/
-                                    (4.0 * M_PI * pow(static_cast<double>(p_sigma)/2.0, 3));
+        maxPartPerCell = SPHERE_PACK_COEFF * (3.0 * cellSize.x*cellSize.y*cellSize.z)/
+                                    (4.0 * M_PI * pow(static_cast<double>(pSigma)/2.0, 3));
 
         maxPartPerCell2pow = pow(2, ceil(log2(maxPartPerCell)));
 
-        cudaMalloc(&cellStartIdx, sizeof(uint) * n_cells);
-        cudaMemset(cellStartIdx, 0, sizeof(uint) * n_cells);
+        cudaMalloc(&cellStartIdxCuda, sizeof(uint) * n_cells);
+        cudaMemset(cellStartIdxCuda, 0, sizeof(uint) * n_cells);
 
         cudaMalloc(&intersectsCuda, sizeof(int));
         cudaMemset(intersectsCuda, 0, sizeof(int));
 
-        cudaMalloc(&energiesCuda, n_adj_cells*sizeof(double));
-        cudaMemset(energiesCuda, 0, n_adj_cells*sizeof(double));
+        cudaMalloc(&energiesCuda, nAdjCells*sizeof(double));
+        cudaMemset(energiesCuda, 0, nAdjCells*sizeof(double));
 
-        cn = (CELLN*) malloc(n_cells*sizeof(CELLN));
+        cn = (AdjCells*) malloc(n_cells*sizeof(AdjCells));
         compute_adj_cells();
 
-        cudaMalloc(&cnCuda, n_cells*sizeof(CELLN));
-        cudaMemcpy(cnCuda, cn, n_cells*sizeof(CELLN), cudaMemcpyHostToDevice);
+        cudaMalloc(&cnCuda, n_cells*sizeof(AdjCells));
+        cudaMemcpy(cnCuda, cn, n_cells*sizeof(AdjCells), cudaMemcpyHostToDevice);
 
         cudaMalloc(&partPerCellCuda, n_cells*sizeof(uint));
 
@@ -109,7 +107,7 @@ public:
     ~Grid() {
         cudaFree(cudaL);
         cudaFree(intersectsCuda);
-        cudaFree(cellStartIdx);
+        cudaFree(cellStartIdxCuda);
         free(cn);
     }
     Grid operator=(const Grid &grid) = delete;
@@ -121,7 +119,7 @@ public:
 
     /* returns cell coordinates in 3D space -- (x,y,z) */
     template <typename T>
-    D3<int> get_cell(D3<T> p) const;
+    D3<int> cell(D3<T> p) const;
 
     template <typename T>
     size_t cell_id(D3<T> p) const;
@@ -139,10 +137,6 @@ public:
     std::vector<size_t>
     check_intersect_cpu(Particle particle, uint cell_id, uint particle_id);
 
-
-    template <typename T>
-    uint cell_at_offset(D3<uint> init_cell, D3<T> offset) const;
-
     /*
      * Insert particle into <particles_ordered> array, updating <cellStartIdx> and <partPerCell>.
      *  It also adds particleto CPU <particles> vector
@@ -152,8 +146,6 @@ public:
 
 
     void fill();
-    void fill_cpu();
-
     void move(double dispmax);
     void export_to_pdb(const std::string& fn);
 
@@ -181,10 +173,7 @@ public:
     double density() const;
     double packing_fraction() const;
 
-
-
     void compute_adj_cells();
-
 
     void print_grid_info() const;
 };
