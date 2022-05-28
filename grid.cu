@@ -48,10 +48,6 @@ double Grid::packing_fraction() const {
 }
 
 void Grid::print_grid_info() const {
-    constexpr double SPHERE_PACK_COEFF = 0.9069;
-    int max_n_sphere = SPHERE_PACK_COEFF * (3.0 * cell_size.x * cell_size.y * cell_size.z) /
-                                    (4.0 * M_PI * pow(static_cast<double>(p_sigma)/2.0, 3));
-
     std::cout << "Simulation box size:\t\t" << L.x << " x " << L.y << " x " << L.z
         << " (volume = " << volume() << ")"<< std::endl;
     std::cout << "Num of cells per dimention:\t"
@@ -60,7 +56,7 @@ void Grid::print_grid_info() const {
     std::cout << "Cell size:\t\t\t"
         << cell_size.x << " x " << cell_size.y << " x " << cell_size.z << std::endl;
     std::cout << "Average particles per cell:\t" << static_cast<double>(n)/n_cells << std::endl;
-    std::cout << "Max particles per cell:\t\t" << max_n_sphere << std::endl;
+    std::cout << "Max particles per cell:\t\t" << maxPartPerCell << std::endl;
     std::cout << "Packing fraction:\t\t" << packing_fraction() << std::endl;
     std::cout << "Density:\t\t\t" << density() << std::endl;
     std::cout << "Expected number of particles:\t" << n << std::endl;
@@ -346,8 +342,9 @@ void Grid::fill() {
         throw std::runtime_error("Actual number of particles <de_facto_n()> in grid\
                 is not equal to desired number of particles <n> after fill");
 
-    std::cout << "Tries: " << count_tries << std::endl;
+    cudaMemcpy(partPerCellCuda, partPerCell, sizeof(uint)*n_cells, cudaMemcpyHostToDevice);
 
+    std::cout << "Tries: " << count_tries << std::endl;
     std::cout << std::endl;
 }
 
@@ -399,13 +396,82 @@ check_intersect (
         atomicAdd(intersects, 1);
 }
 
+__global__ void energy_all_cell_kernel(double* energy, Particle particle, const uint *partPerCell,
+                                       const Particle *particles, const uint *cellStartIdx,
+                                       const D3<double> *L,
+                                       const CELLN *adjCells, uint currPartCell)
+{
+
+    extern __shared__ double part_energy[];
+
+    const double sqe = -1.0;
+    const double sqw = 0.2;
+    const double inf = 10000000;
+
+    int blockI = blockIdx.x;
+    if (blockI >= 27) {
+        printf("blockI is > 27\n");
+        return;
+    }
+
+    printf("Processing...\n");
+
+    uint currCellId = adjCells[currPartCell].ic[blockI];
+
+    uint startIdx = cellStartIdx[currCellId];
+    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < partPerCell[currCellId]) {
+        auto xd = device_min( fabs(particle.x - particles[startIdx+idx].x),
+                              L->x - fabs(particle.x - particles[startIdx+idx].x) );
+
+        auto yd = device_min( fabs(particle.y - particles[startIdx+idx].y),
+                              L->y - fabs(particle.y - particles[startIdx+idx].y) );
+
+        auto zd = device_min( fabs(particle.z - particles[startIdx+idx].z),
+                              L->z - fabs(particle.z - particles[startIdx+idx].z) );
+
+        auto dist = hypot(hypot(xd, yd), zd);
+
+        if ((dist >= particle.sigma) && (dist < particle.sigma + sqw))
+            part_energy[idx] = sqe;
+        else if (dist < particle.sigma) {
+            if (particle.id == particles[startIdx+idx].id)
+                part_energy[idx] = 0.0;
+            else {
+                part_energy[idx] = inf;
+    //            printf("Error, intersected. %lu with %lu (cell %i) -- dist = %f\n",
+    //                   particle->id, particles[startIdx+idx].id, curr_cell_id, dist);
+            }
+        }
+        else
+            part_energy[idx] = 0;
+    }
+    else
+        part_energy[idx] = 0;
+
+    printf("block = %i, thread = %i. ener = %f", blockI, threadIdx.x, part_energy[idx]);
+
+    __syncthreads();
+
+    for (int i = blockDim.x/2; i > 0; i/=2) {
+        if (idx < i)
+            part_energy[idx] += part_energy[idx + i];
+        __syncthreads();
+    }
+
+    printf("energy[%i] = %f\n", blockI, part_energy[0]);
+
+    if (idx == 0)
+        energy[blockI] = part_energy[0];
+
+}
+
 void Grid::move(double dispmax) {
     uint success = 0;
 
     for (size_t j = 0; j < n; j++) {
         auto &i = particles[random_int(0, n-1)];
-
-        auto curr_part_id = i.id;
 
         D3<int> init_p_cell = get_cell(i.get_coord());
         size_t init_p_cell_id = cell_id(init_p_cell);
@@ -429,6 +495,7 @@ void Grid::move(double dispmax) {
         double z = i.z + vec_z * dispmax;
 
         Particle particle = Particle(x, y, z, p_sigma);
+        particle.id = i.id;
 
         Particle *init_particle;
         cudaMalloc(&init_particle, sizeof(Particle));
@@ -439,65 +506,94 @@ void Grid::move(double dispmax) {
         cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
 
         D3<double> p_point = particle.get_coord();
-        D3<int> p_cell = get_cell(p_point);
-        size_t new_p_cell_id = cell_id(p_cell);
+        size_t new_p_cell_id = cell_id(get_cell(p_point));
 
         bool intersected = false;
         bool accept = false;
 
-        double init_en_total = 0;
-        double new_en_total = 0;
-        for (auto z_off = -1; z_off <= 1; ++z_off) {
-            for (auto y_off = -1; y_off <= 1; ++y_off) {
-                for (auto x_off = -1; x_off <= 1; ++x_off) {
-                    cudaMemset(intersectsCuda, 0, sizeof(int));
+        energy_all_cell_kernel<<<n_adj_cells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
+                        (energiesCuda, i, partPerCellCuda, particles_ordered.get_array(),
+                         cellStartIdx, cudaL, cnCuda, init_p_cell_id);
 
-                    // TODO: do it better, without double
-                    D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
-                    uint curr_cell_id = cell_id(get_cell(p_point + offset));
-                    /************************************/
+        double *preEnergies = new double[n_adj_cells];
+        cudaMemcpy(preEnergies, energiesCuda, sizeof(double) * n_adj_cells, cudaMemcpyDeviceToHost);
 
-                    // number of particles in cell
-                    size_t partInCell = partPerCell[curr_cell_id];
-
-                    if (partInCell == 0)
-                        continue;
-
-                    const Particle *cuda_ordered_particles = particles_ordered.get_array();
+        double preEnergy = 0.0;
+        for (uint i = 0; i < n_adj_cells; i++)
+            preEnergy += preEnergies[i];
 
 
-                    size_t arr_size = pow(2, ceil(log2(partInCell)));
-                    energy_single_kernel<<<1, partInCell, arr_size*sizeof(double)>>>(energyCuda,
-                                                                                     init_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
-                                                                                     cudaL, curr_part_id, partInCell, arr_size);
+        energy_all_cell_kernel<<<n_adj_cells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
+                        (energiesCuda, particle, partPerCellCuda, particles_ordered.get_array(),
+                         cellStartIdx, cudaL, cnCuda, new_p_cell_id);
 
-                    auto* init_en = new double;
-                    cudaMemcpy(init_en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
-                    cudaMemset(energyCuda, 0, sizeof(double));
+        double *postEnergies = new double[n_adj_cells];
+        cudaMemcpy(postEnergies, energiesCuda, sizeof(double) * n_adj_cells, cudaMemcpyDeviceToHost);
 
-                    energy_single_kernel<<<1, partInCell, arr_size*sizeof(double)>>>(energyCuda,
-                                                                                     cuda_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
-                                                                                     cudaL, curr_part_id, partInCell, arr_size);
+        double postEnergy = 0.0;
+        for (uint i = 0; i < n_adj_cells; i++)
+            postEnergy += postEnergies[i];
+
+        if (postEnergy > 0)
+            intersected = true;
 
 
-                    auto* en = new double;
-                    cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
-                    cudaMemset(energyCuda, 0, sizeof(double));
+        //double init_en_total = 0;
+        //double new_en_total = 0;
 
-                    if (*en > 0) {
-                        intersected = true;
-                        break;
-                    }
+        //for (auto z_off = -1; z_off <= 1; ++z_off) {
+            //for (auto y_off = -1; y_off <= 1; ++y_off) {
+                //for (auto x_off = -1; x_off <= 1; ++x_off) {
+                    //cudaMemset(intersectsCuda, 0, sizeof(int));
 
-                    init_en_total += *init_en;
-                    new_en_total += *en;
-                }
-                if (intersected) break;
-            }
-            if (intersected) break;
-        }
+                    //// TODO: do it better, without double
+                    //D3<double> offset = {x_off*cell_size.x, y_off*cell_size.y, z_off*cell_size.z};
+                    //uint curr_cell_id = cell_id(get_cell(p_point + offset));
+                    //[>**********************************<]
 
-        auto delta_en = init_en_total - new_en_total;
+                    //// number of particles in cell
+                    //size_t partInCell = partPerCell[curr_cell_id];
+
+                    //if (partInCell == 0)
+                        //continue;
+
+                    //const Particle *cuda_ordered_particles = particles_ordered.get_array();
+
+
+                    //size_t arr_size = pow(2, ceil(log2(partInCell)));
+                    //energy_single_kernel<<<1, maxPartPerCell, maxPartPerCell2pow*sizeof(double)>>>
+                                //(energyCuda, init_particle, cuda_ordered_particles, cellStartIdx,
+                                 //curr_cell_id, cudaL, curr_part_id, partInCell, arr_size);
+
+                    //auto* init_en = new double;
+                    //cudaMemcpy(init_en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
+                    //cudaMemset(energyCuda, 0, sizeof(double));
+
+                    //energy_single_kernel<<<1, partInCell, arr_size*sizeof(double)>>>(energyCuda,
+                                                                                     //cuda_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
+                                                                                     //cudaL, curr_part_id, partInCell, arr_size);
+
+
+                    //auto* en = new double;
+                    //cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
+                    //cudaMemset(energyCuda, 0, sizeof(double));
+
+                    //if (*en > 0) {
+                        //intersected = true;
+                        //break;
+                    //}
+
+                    //init_en_total += *init_en;
+                    //new_en_total += *en;
+                //}
+                //if (intersected) break;
+            //}
+            //if (intersected) break;
+        //}
+        //auto delta_en = init_en_total - new_en_total;
+
+        auto delta_en = preEnergy - postEnergy;
+
         if (delta_en < 0) {
             accept = true;
         } else {
@@ -521,13 +617,20 @@ void Grid::move(double dispmax) {
                 partPerCell[new_p_cell_id]++;
                 partPerCell[init_p_cell_id]--;
 
+                cudaMemcpy(&partPerCellCuda[new_p_cell_id], &partPerCell[new_p_cell_id],
+                                                    sizeof(uint), cudaMemcpyHostToDevice);
+                cudaMemcpy(&partPerCellCuda[init_p_cell_id], &partPerCell[init_p_cell_id],
+                                                    sizeof(uint), cudaMemcpyHostToDevice);
+
                 int remove_status = particles_ordered.remove_by_id(i.id);
                 if (remove_status)
-                    throw std::runtime_error("Error in remove");
+                    break;
+                    //throw std::runtime_error("Error in remove");
 
                 int insert_status = particles_ordered.insert(i, *partCellStartIdx);
                 if (insert_status)
-                    throw std::runtime_error("Error in insert");
+                    break;
+                    //throw std::runtime_error("Error in insert");
 
                 size_t cells_in_range = init_p_cell_id > new_p_cell_id ?
                             init_p_cell_id - new_p_cell_id : new_p_cell_id - init_p_cell_id;
@@ -574,13 +677,13 @@ void Grid::system_energy() {
                     if (partInCell == 0)
                         continue;
                     size_t arr_size = pow(2, ceil(log2(partInCell)));
-                    energy_single_kernel<<<1, partInCell, arr_size*sizeof(double)>>>(energyCuda,
+                    energy_single_kernel<<<1, partInCell, arr_size*sizeof(double)>>>(energiesCuda,
                             cuda_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
                             cudaL, curr_part_id, partInCell, arr_size);
 
                     auto* en = new double;
-                    cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
-                    cudaMemset(energyCuda, 0, sizeof(double));
+                    cudaMemcpy(en, energiesCuda, sizeof(double), cudaMemcpyDeviceToHost);
+                    cudaMemset(energiesCuda, 0, sizeof(double));
 
                     energy += *en;
                     delete en;
@@ -779,4 +882,50 @@ void Grid::complex_insert(Particle p) {
     }
 
     free(partCellStartIdx);
+}
+
+
+
+
+void Grid::compute_adj_cells() {
+    //for (auto ix = 0; ix < dim_cells.x; ix+=cell_size.x) {
+        //for (auto iy = 0; iy < dim_cells.y; iy+=cell_size.y) {
+            //for (auto iz = 0; iz < dim_cells.z; iz+=cell_size.z) {
+    for (auto ix = 0; ix < dim_cells.x; ix++) {
+        for (auto iy = 0; iy < dim_cells.y; iy++) {
+            for (auto iz = 0; iz < dim_cells.z; iz++) {
+                auto ikx = ix;
+                auto iky = iy;
+                auto ikz = iz;
+                auto parr_cell_id = cell_id(D3<int>(ikx, iky, ikz));
+                auto k = 0;
+                for (auto jx = ix-1; jx <= ix+1; jx++) {
+                    for (auto jy = iy-1; jy <= iy+1; jy++) {
+                        for (auto jz = iz-1; jz <= iz+1; jz++) {
+                            // this cell coordinates
+                            auto tc_x = jx;
+                            auto tc_y = jy;
+                            auto tc_z = jz;
+                            if (tc_x < 0) tc_x += dim_cells.x; if (tc_x > dim_cells.x-1) tc_x -= dim_cells.x;
+                            if (tc_y < 0) tc_y += dim_cells.y; if (tc_y > dim_cells.y-1) tc_y -= dim_cells.y;
+                            if (tc_z < 0) tc_z += dim_cells.z; if (tc_z > dim_cells.z-1) tc_z -= dim_cells.z;
+                            
+                            //long jk = jkz*dim_cells.y*dim_cells.x + jky*dim_cells.x + jkx;
+                            uint curr_cell_id = cell_id(D3<double>(tc_x, tc_y, tc_z));
+                            cn[parr_cell_id].ic[k] = curr_cell_id;
+                            k++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // print cn
+    for (auto i = 0; i < n_cells; i++) {
+        std::cout << "Cell " << i << ": ";
+        for (auto j = 0; j < 27; j++) {
+            std::cout << cn[i].ic[j] << " ";
+        }
+        std::cout << std::endl;
+    }
 }

@@ -11,6 +11,13 @@
 #include "d3.cuh"
 #include "array.cuh"
 
+constexpr double SPHERE_PACK_COEFF = 0.9069;
+
+struct CELLN { 
+    uint ic[27];    // id of cell
+};
+
+
 class Grid {
 private:
     /* Number of cells per each dimention */
@@ -26,6 +33,8 @@ private:
 
     /* number of cells in system */
     size_t n_cells = 0;
+    uint maxPartPerCell = 0;
+    uint maxPartPerCell2pow = 0;
     double energy = 0;
 
     /* Grid particle's sigma -- diameter */
@@ -33,13 +42,21 @@ private:
     const double temp = 0.5;
     const double beta = 1.0/temp;
 
+    /* Number of adjacent cells for a cell */
+    const uint n_adj_cells = 27;
+
+    CELLN *cn;
+
     /************************ On GPU ************************/
+
+    CELLN *cnCuda;
+    uint *partPerCellCuda;
 
     D3<double> *cudaL;
     OrderedArray particles_ordered;
 
-    /* Helper double that stores cell energy. Use in kernel; copied from CUDA to CPU */
-    double *energyCuda;
+    /* Helper array of 27 doubles that stores cells energy for all adjacent cells */
+    double *energiesCuda;
 
     /* Helper boolean array, needed in kernel funciton during intersection check */
     int *intersectsCuda;
@@ -65,14 +82,27 @@ public:
         partPerCell = new uint[n_cells];
         memset(partPerCell, 0, sizeof(uint) * n_cells);
 
+        maxPartPerCell = SPHERE_PACK_COEFF * (3.0 * cell_size.x*cell_size.y*cell_size.z)/
+                                    (4.0 * M_PI * pow(static_cast<double>(p_sigma)/2.0, 3));
+
+        maxPartPerCell2pow = pow(2, ceil(log2(maxPartPerCell)));
+
         cudaMalloc(&cellStartIdx, sizeof(uint) * n_cells);
         cudaMemset(cellStartIdx, 0, sizeof(uint) * n_cells);
 
         cudaMalloc(&intersectsCuda, sizeof(int));
         cudaMemset(intersectsCuda, 0, sizeof(int));
 
-        cudaMalloc(&energyCuda, sizeof(double));
-        cudaMemset(energyCuda, 0, sizeof(double));
+        cudaMalloc(&energiesCuda, n_adj_cells*sizeof(double));
+        cudaMemset(energiesCuda, 0, n_adj_cells*sizeof(double));
+
+        cn = (CELLN*) malloc(n_cells*sizeof(CELLN));
+        compute_adj_cells();
+
+        cudaMalloc(&cnCuda, n_cells*sizeof(CELLN));
+        cudaMemcpy(cnCuda, cn, n_cells*sizeof(CELLN), cudaMemcpyHostToDevice);
+
+        cudaMalloc(&partPerCellCuda, n_cells*sizeof(uint));
 
         print_grid_info();
     }
@@ -80,6 +110,7 @@ public:
         cudaFree(cudaL);
         cudaFree(intersectsCuda);
         cudaFree(cellStartIdx);
+        free(cn);
     }
     Grid operator=(const Grid &grid) = delete;
 
@@ -149,6 +180,11 @@ public:
     /* density() and packing_fraction() computes value for desired n, not actual */
     double density() const;
     double packing_fraction() const;
+
+
+
+    void compute_adj_cells();
+
 
     void print_grid_info() const;
 };
