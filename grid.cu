@@ -48,12 +48,19 @@ double Grid::packing_fraction() const {
 }
 
 void Grid::print_grid_info() const {
+    constexpr double SPHERE_PACK_COEFF = 0.9069;
+    int max_n_sphere = SPHERE_PACK_COEFF * (3.0 * cell_size.x * cell_size.y * cell_size.z) /
+                                    (4.0 * M_PI * pow(static_cast<double>(p_sigma)/2.0, 3));
+
     std::cout << "Simulation box size:\t\t" << L.x << " x " << L.y << " x " << L.z
         << " (volume = " << volume() << ")"<< std::endl;
     std::cout << "Num of cells per dimention:\t"
-        << dim_cells.x << ", " << dim_cells.y << ", " << dim_cells.z << std::endl;
+        << dim_cells.x << " x " << dim_cells.y << " x " << dim_cells.z << "  = "
+        << n_cells << std::endl;
     std::cout << "Cell size:\t\t\t"
         << cell_size.x << " x " << cell_size.y << " x " << cell_size.z << std::endl;
+    std::cout << "Average particles per cell:\t" << static_cast<double>(n)/n_cells << std::endl;
+    std::cout << "Max particles per cell:\t\t" << max_n_sphere << std::endl;
     std::cout << "Packing fraction:\t\t" << packing_fraction() << std::endl;
     std::cout << "Density:\t\t\t" << density() << std::endl;
     std::cout << "Expected number of particles:\t" << n << std::endl;
@@ -472,7 +479,6 @@ void Grid::move(double dispmax) {
                                                                                      cuda_particle, cuda_ordered_particles, cellStartIdx, curr_cell_id,
                                                                                      cudaL, curr_part_id, partInCell, arr_size);
 
-                    init_en_total += *init_en;
 
                     auto* en = new double;
                     cudaMemcpy(en, energyCuda, sizeof(double), cudaMemcpyDeviceToHost);
@@ -483,6 +489,7 @@ void Grid::move(double dispmax) {
                         break;
                     }
 
+                    init_en_total += *init_en;
                     new_en_total += *en;
                 }
                 if (intersected) break;
