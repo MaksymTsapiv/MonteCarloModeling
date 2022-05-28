@@ -9,7 +9,7 @@ std::map<std::string, double> parse_conf(std::ifstream &file);
 class Config {
 public:
     double Lx, Ly, Lz, dispmax;
-    size_t N;
+    size_t N, N_steps;
     uint N_cells;
 
     static Config from_map(std::map<std::string, double> &config);

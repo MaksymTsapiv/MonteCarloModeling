@@ -43,12 +43,17 @@ int main(int argc, char* argv[]) {
     auto rdf1 = compute_rdf(grid, dr, rmax);
     save_rdf_to_file(rdf1, dr, rmax, "rdf_fill.dat");
 
-    grid.system_energy();
-    std::cout << "energy1 = " << grid.get_energy() << std::endl;
-
+//    grid.system_energy();
+//    std::cout << "energy1 = " << grid.get_energy() << std::endl;
 
     auto start_move = get_current_time_fenced();
-    grid.move(conf.dispmax);
+    for (auto i = 0; i < conf.N_steps; ++i) {
+        if (i % 10 == 0) {
+            grid.system_energy();
+            std::cout << "energy = " << grid.get_energy() << "\n";
+        }
+        grid.move(conf.dispmax);
+    }
     auto finish_move = get_current_time_fenced();
     grid.export_to_pdb("move.pdb");
     grid.export_to_cf("move.cf");
@@ -60,7 +65,7 @@ int main(int argc, char* argv[]) {
     grid.system_energy();
     auto finish_energy = get_current_time_fenced();
 
-    std::cout << "energy2 = " << grid.get_energy() << std::endl;
+//    std::cout << "energy2 = " << grid.get_energy() << std::endl;
 
 
     std::cout << "fill: " << to_us(finish_fill - start_fill) << " us"
