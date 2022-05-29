@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
     grid.system_energy();
     auto finish_energy = get_current_time_fenced();
 
-//    std::cout << "energy2 = " << grid.get_energy() << std::endl;
+    std::cout << "final energy = " << grid.get_energy() << std::endl;
 
 
     std::cout << "fill: " << to_us(finish_fill - start_fill) << " us"
