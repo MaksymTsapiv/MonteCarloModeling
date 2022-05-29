@@ -31,5 +31,11 @@ Config Config::from_map(std::map<std::string, double> &config) {
     conf.dispmax = config["dispmax"];
     conf.N_cells = static_cast<uint>(config["N_cells"]);
     conf.N = static_cast<size_t>(config["N"]);
+    conf.restore = static_cast<size_t>(config["restore"]);
+
+    conf.rdf_step = static_cast<size_t>(config["rdf_step"]);
+    conf.export_pdb_step = static_cast<size_t>(config["export_pdb_step"]);
+    conf.export_cf_step = static_cast<size_t>(config["export_cf_step"]);
+    conf.energy_step = static_cast<size_t>(config["energy_step"]);
     return conf;
 }

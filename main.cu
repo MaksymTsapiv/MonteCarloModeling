@@ -21,7 +21,6 @@ int main(int argc, char* argv[]) {
         throw std::runtime_error("Error while opening the config file " + std::string(argv[1]));
 
     auto config = parse_conf(data);
-
     auto conf = Config::from_map(config);
 
     Grid grid(conf.Lx, conf.Ly, conf.Lz, D3<uint>{conf.N_cells}, conf.N);
@@ -29,53 +28,83 @@ int main(int argc, char* argv[]) {
     const double dr = 0.1;
     const double rmax = grid.L.x / 2;
 
-    //grid.import_from_cf("fill.cf");
-    //grid.move(conf.dispmax);
-    //grid.export_to_pdb("move.pdb");
-    //exit(1);
 
-    auto start_fill = get_current_time_fenced();
-    grid.fill();
-    auto finish_fill = get_current_time_fenced();
-    grid.export_to_pdb("fill.pdb");
-    grid.export_to_cf("fill.cf");
-
-    auto rdf1 = compute_rdf(grid, dr, rmax);
-    save_rdf_to_file(rdf1, dr, rmax, "rdf_fill.dat");
-
-//    grid.system_energy();
-//    std::cout << "energy1 = " << grid.get_energy() << std::endl;
-
-    auto start_move = get_current_time_fenced();
-    for (auto i = 0; i < conf.N_steps; ++i) {
-        if (i % 10 == 0) {
-            grid.system_energy();
-            std::cout << "energy = " << grid.get_energy() << "\n";
-        }
-        grid.move(conf.dispmax);
+    std::cout << "Initializing..." << std::endl;
+    auto start_init = get_current_time_fenced();
+    if (conf.restore)
+        grid.import_from_cf("init.cf");
+    else {
+        grid.fill();
+        grid.export_to_cf("init.cf");
     }
-    auto finish_move = get_current_time_fenced();
-    grid.export_to_pdb("move.pdb");
-    grid.export_to_cf("move.cf");
+    auto finish_init = get_current_time_fenced();
 
-    auto rdf2 = compute_rdf(grid, dr, rmax, rdf1);
-    save_rdf_to_file(rdf2, dr, rmax, "rdf_move.dat");
+    std::cout << "   Done initializing in " << to_us(finish_init - start_init) << " us"
+              << "  ~  "  << to_s(finish_init - start_init) << " s" <<  std::endl;
 
-    auto start_energy = get_current_time_fenced();
     grid.system_energy();
-    auto finish_energy = get_current_time_fenced();
+    std::cout << "Initial energy = " << grid.get_energy() << "\n";
 
-    std::cout << "final energy = " << grid.get_energy() << std::endl;
+    std::vector<double> prev_rdf;
+    if (conf.rdf_step) {
+        std::cout << "Calculating and saving initial RDF..." << std::endl;
+        prev_rdf = compute_rdf(grid, dr, rmax);
+        save_rdf_to_file(prev_rdf, dr, rmax, "rdf_init.dat");
+        std::cout << "  Done" << std::endl;
+    }
+
+    auto start_loop = get_current_time_fenced();
+    for (auto i = 0; i < conf.N_steps; ++i) {
+        std::cout << std::endl << "Step " << i << std::endl;
+
+        std::cout << "Moving... " << std::endl;
+        auto n_moved = grid.move(conf.dispmax);
+        std::cout << "  Done, moved " << n_moved << std::endl;
+
+        if (conf.export_cf_step && i % conf.export_cf_step == 0) {
+            std::cout << "Exporting to custom format... " << std::endl;
+            grid.export_to_cf("step_" + std::to_string(i) + ".cf");
+            std::cout << "  Done" << std::endl;
+        }
+        if (conf.export_pdb_step && i % conf.export_pdb_step == 0) {
+            std::cout << "Exporting to pdb... " << std::endl;
+            grid.export_to_pdb("step_" + std::to_string(i) + ".pdb");
+            std::cout << "  Done" << std::endl;
+        }
+        if (conf.rdf_step && i % conf.rdf_step == 0) {
+            std::cout << "Calculating and saving RDF... " << std::endl;
+            auto rdf = compute_rdf(grid, dr, rmax, prev_rdf);
+            prev_rdf = rdf;
+            save_rdf_to_file(rdf, dr, rmax, "rdf_step_" + std::to_string(i) + ".dat");
+            std::cout << "  Done" << std::endl;
+        }
+        if (conf.energy_step && i % conf.energy_step == 0) {
+            grid.system_energy();
+            std::cout << "Energy = " << grid.get_energy() << std::endl;
+        }
+    }
+    auto finish_loop = get_current_time_fenced();
 
 
-    std::cout << "fill: " << to_us(finish_fill - start_fill) << " us"
-              << "\t=  "  << to_s(finish_fill - start_fill) << " s"
-              << std::endl;
-    std::cout << "move: " << to_us(finish_move - start_move) << " us"
-              << "\t=  "  << to_s(finish_move - start_move) << " s"
-              << std::endl;
-    std::cout << "energy: " << to_us(finish_energy - start_energy) << " us"
-              << "\t=  "  << to_s(finish_energy - start_energy) << " s"
+    std::cout << "Exporting final system to custom format and pdb... " << std::endl;
+    grid.export_to_pdb("final.pdb");
+    grid.export_to_cf("final.cf");
+    std::cout << "  Done" << std::endl;
+
+    if (conf.rdf_step) {
+        std::cout << "Calculating and saving final RDF..." << std::endl;
+        auto final_rdf = compute_rdf(grid, dr, rmax, prev_rdf);
+        save_rdf_to_file(final_rdf, dr, rmax, "rdf_final.dat");
+        std::cout << "  Done" << std::endl;
+    }
+
+
+    grid.system_energy();
+    std::cout << "Final energy = " << grid.get_energy() << std::endl;
+
+
+    std::cout << "Loop time: " << to_us(finish_loop - start_loop) << " us"
+              << "\t=  "  << to_s(finish_loop - start_loop) << " s"
               << std::endl;
 
     return 0;

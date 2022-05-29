@@ -65,7 +65,7 @@ void Grid::print_grid_info() const {
 
 template <typename T>
 D3<T> Grid::normalize(const D3<T> p) const {
-    D3<double> new_p = p;
+    D3<T> new_p = p;
 
     if (p.x < 0)
         new_p.x = p.x + L.x;
@@ -457,7 +457,7 @@ __global__ void energy_all_cell_kernel(double* energy, Particle particle, const 
 
 }
 
-void Grid::move(double dispmax) {
+size_t Grid::move(double dispmax) {
     uint success = 0;
 
     for (size_t j = 0; j < n; j++) {
@@ -578,7 +578,7 @@ void Grid::move(double dispmax) {
             success++;
         }
     }
-    std::cout << success << " moved" << std::endl;
+    return success;
 }
 
 void Grid::system_energy() {

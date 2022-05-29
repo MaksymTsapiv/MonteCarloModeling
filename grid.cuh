@@ -146,7 +146,7 @@ public:
 
 
     void fill();
-    void move(double dispmax);
+    size_t move(double dispmax);
     void export_to_pdb(const std::string& fn);
 
     /* Import and export to Custom Format (cf) */
