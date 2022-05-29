@@ -496,6 +496,8 @@ size_t Grid::move(double dispmax) {
         auto delta_en = preEnergy - postEnergy;
 
         if (delta_en > 0) {
+            accept = true;
+        } else {
             if ((double) rand() / RAND_MAX < exp(-beta * delta_en))
                 accept = true;
         }
@@ -562,7 +564,7 @@ void Grid::system_energy() {
                         (energiesCuda, particle, partPerCellCuda, orderedParticlesCuda.get_array(),
                          cellStartIdxCuda, cudaL, cnCuda, pCellId);
 
-        double *energies = new double[nAdjCells];
+        auto *energies = new double[nAdjCells];
         cudaMemcpy(energies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
 
         for (uint i = 0; i < nAdjCells; i++)
