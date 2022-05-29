@@ -145,7 +145,9 @@ public:
     void complex_insert(Particle p);
 
 
-    void fill();
+    // Returns number of tries
+    size_t fill();
+    // Returns number of successful moves
     size_t move(double dispmax);
     void export_to_pdb(const std::string& fn);
 

@@ -30,20 +30,26 @@ int main(int argc, char* argv[]) {
 
 
     std::cout << "Initializing..." << std::endl;
+    size_t fill_res = 0;
     auto start_init = get_current_time_fenced();
     if (conf.restore)
         grid.import_from_cf("init.cf");
     else {
-        grid.fill();
+        fill_res = grid.fill();
         grid.export_to_cf("init.cf");
     }
     auto finish_init = get_current_time_fenced();
 
-    std::cout << "   Done initializing in " << to_us(finish_init - start_init) << " us"
-              << "  ~  "  << to_s(finish_init - start_init) << " s" <<  std::endl;
+    std::cout << "   Done initializing";
+
+    if (!conf.restore)
+        std::cout << ". Fill tries: " << fill_res;
+
+    std::cout << ". Time: " << to_us(finish_init - start_init) << " us"
+              << "  ~  "  << to_s(finish_init - start_init) << " s" << std::endl << std::endl;
 
     grid.system_energy();
-    std::cout << "Initial energy = " << grid.get_energy() << "\n";
+    std::cout << "Initial energy = " << grid.get_energy() << std::endl;
 
     std::vector<double> prev_rdf;
     if (conf.rdf_step) {

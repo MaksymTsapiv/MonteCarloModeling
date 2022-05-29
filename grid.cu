@@ -265,136 +265,6 @@ __global__ void energy_single_kernel(double* energy, const Particle* particle,
 }
 
 
-void Grid::fill() {
-    size_t count_tries = 0;
-    size_t max_tries = 10000 * n;
-
-    while ((particles.size() < n) && count_tries < max_tries) {
-
-        double x = L.x * random_double(0, 1);
-        double y = L.y * random_double(0, 1);
-        double z = L.z * random_double(0, 1);
-
-        Particle particle = Particle(x, y, z, pSigma);
-
-        Particle *cuda_particle;
-        cudaMalloc(&cuda_particle, sizeof(Particle));
-        cudaMemcpy(cuda_particle, &particle, sizeof(Particle), cudaMemcpyHostToDevice);
-
-        D3<double> p_point = particle.get_coord();
-        D3<int> p_cell = cell(p_point);
-
-        bool intersected = false;
-
-        for (auto z_off = -1; z_off <= 1; ++z_off) {
-            for (auto y_off = -1; y_off <= 1; ++y_off) {
-                for (auto x_off = -1; x_off <= 1; ++x_off) {
-                    cudaMemset(intersectsCuda, 0, sizeof(int));
-
-                    // TODO: do it better, without double
-                    D3<double> offset = {x_off*cellSize.x, y_off*cellSize.y, z_off*cellSize.z};
-                    uint curr_cell_id = cell_id(cell(p_point + offset));
-                    /************************************/
-
-                    // number of particles in cell
-                    size_t partInCell = partPerCell[curr_cell_id];
-
-                    if (partInCell == 0)
-                        continue;
-
-                    const Particle *cuda_ordered_particles = orderedParticlesCuda.get_array();
-
-                    size_t threadsPerBlock = std::min(partInCell, MAX_BLOCK_THREADS);
-                    size_t numBlocks = (partInCell + threadsPerBlock - 1) / threadsPerBlock;
-                    check_intersect<<<numBlocks, threadsPerBlock>>>(cuda_particle,
-                                                cuda_ordered_particles, cellStartIdxCuda,
-                                                curr_cell_id, cudaL, intersectsCuda);
-
-                    int *intersects = new int;
-                    cudaMemcpy(intersects, intersectsCuda, sizeof(int),
-                                                            cudaMemcpyDeviceToHost);
-
-                    if (*intersects > 0) {
-                        intersected = true;
-                        delete intersects;
-                        break;
-                    }
-
-                    delete intersects;
-                }
-                if (intersected) break;
-            }
-            if (intersected) break;
-        }
-
-        if (!intersected) {
-            complex_insert(particle);
-            if (particle.id % 1000 == 0)
-                std::cout << "Inserting " << particle.id << "'s" << std::endl;
-        }
-        else // If a particle wasn't inserted, do not increment Particle's nextId counter
-            Particle::nextId--;
-
-        count_tries++;
-        cudaFree(cuda_particle);
-    }
-    if (n != de_facto_n())
-        throw std::runtime_error("Actual number of particles <de_facto_n()> in grid\
-                is not equal to desired number of particles <n> after fill");
-
-    cudaMemcpy(partPerCellCuda, partPerCell, sizeof(uint)*n_cells, cudaMemcpyHostToDevice);
-
-    std::cout << "Tries: " << count_tries << std::endl;
-    std::cout << std::endl;
-}
-
-__global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id, size_t N) {
-    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
-    if (threadId >= N)
-        return;
-    cellStartIdx[new_cell_id+1 + threadId]++;
-}
-
-__global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id, size_t N) {
-    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
-    if (threadId >= N)
-        return;
-    cellStartIdx[init_cell_id+1 + threadId]--;
-}
-
-/*
- * Overload of check_intersect that accepts another argument <curr_part_id>,
- *  to ignore checking with particle with that id. This overload is used in move function
- */
-__global__ void
-check_intersect (
-        const Particle *particle,
-        const Particle *ordered_particles,
-        const uint *cellStartIdx,
-        uint curr_cell_id,
-        const D3<double> *L,
-        int *intersects,
-        uint curr_part_id) {
-
-    uint startIdx = cellStartIdx[curr_cell_id];
-    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (curr_part_id == ordered_particles[startIdx+idx].id)
-        return;
-
-    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
-                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
-
-    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
-                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
-
-    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
-                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
-
-    auto dist = hypot(hypot(xd, yd), zd);
-    if (dist < particle->sigma)
-        atomicAdd(intersects, 1);
-}
 
 __global__ void energy_all_cell_kernel(double* energy, Particle particle, const uint *partPerCell,
                                        const Particle *particles, const uint *cellStartIdx,
@@ -455,6 +325,109 @@ __global__ void energy_all_cell_kernel(double* energy, Particle particle, const 
     if (threadIdx.x == 0)
         energy[blockI] = part_energy[0];
 
+}
+
+
+
+
+
+
+
+size_t Grid::fill() {
+    size_t count_tries = 0;
+    size_t max_tries = 10000 * n;
+
+    while ((particles.size() < n) && count_tries < max_tries) {
+
+        double x = L.x * random_double(0, 1);
+        double y = L.y * random_double(0, 1);
+        double z = L.z * random_double(0, 1);
+
+        Particle particle = Particle(x, y, z, pSigma);
+
+        auto pCellId = cell_id(cell(particle.get_coord()));
+
+        bool intersected = false;
+        double energy_loc = 0.0;
+
+        energy_all_cell_kernel<<<nAdjCells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
+                        (energiesCuda, particle, partPerCellCuda, orderedParticlesCuda.get_array(),
+                         cellStartIdxCuda, cudaL, cnCuda, pCellId);
+
+        double *energies = new double[nAdjCells];
+        cudaMemcpy(energies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
+
+        for (uint i = 0; i < nAdjCells; i++)
+            energy_loc += energies[i];
+
+        if (energy_loc > 0)
+            intersected = true;
+
+        if (!intersected) {
+            complex_insert(particle);
+            if (particle.id % 1000 == 0)
+                std::cout << "Inserting " << particle.id << "'s" << std::endl;
+        }
+        else // If a particle wasn't inserted, do not increment Particle's nextId counter
+            Particle::nextId--;
+
+        count_tries++;
+    }
+    if (n != de_facto_n())
+        throw std::runtime_error("Actual number of particles <de_facto_n()> in grid\
+                is not equal to desired number of particles <n> after fill");
+
+    cudaMemcpy(partPerCellCuda, partPerCell, sizeof(uint)*n_cells, cudaMemcpyHostToDevice);
+
+    return count_tries;
+}
+
+__global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id, size_t N) {
+    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadId >= N)
+        return;
+    cellStartIdx[new_cell_id+1 + threadId]++;
+}
+
+__global__ void forward_move_kernel(uint *cellStartIdx, size_t init_cell_id, size_t N) {
+    size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadId >= N)
+        return;
+    cellStartIdx[init_cell_id+1 + threadId]--;
+}
+
+/*
+ * Overload of check_intersect that accepts another argument <curr_part_id>,
+ *  to ignore checking with particle with that id. This overload is used in move function
+ */
+__global__ void
+check_intersect (
+        const Particle *particle,
+        const Particle *ordered_particles,
+        const uint *cellStartIdx,
+        uint curr_cell_id,
+        const D3<double> *L,
+        int *intersects,
+        uint curr_part_id) {
+
+    uint startIdx = cellStartIdx[curr_cell_id];
+    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (curr_part_id == ordered_particles[startIdx+idx].id)
+        return;
+
+    auto xd = device_min( fabs(particle->x - ordered_particles[startIdx+idx].x),
+                        L->x - fabs(particle->x - ordered_particles[startIdx+idx].x) );
+
+    auto yd = device_min( fabs(particle->y - ordered_particles[startIdx+idx].y),
+                        L->y - fabs(particle->y - ordered_particles[startIdx+idx].y) );
+
+    auto zd = device_min( fabs(particle->z - ordered_particles[startIdx+idx].z),
+                        L->z - fabs(particle->z - ordered_particles[startIdx+idx].z) );
+
+    auto dist = hypot(hypot(xd, yd), zd);
+    if (dist < particle->sigma)
+        atomicAdd(intersects, 1);
 }
 
 size_t Grid::move(double dispmax) {
