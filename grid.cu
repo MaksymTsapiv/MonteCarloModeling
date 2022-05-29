@@ -272,14 +272,13 @@ __global__ void energy_all_cell_kernel(double* energy, Particle particle, const 
                                        const D3<double> *L,
                                        const AdjCells *adjCells, uint currPartCell)
 {
-
     extern __shared__ double part_energy[];
 
     const double sqe = -1.0;
     const double sqw = 0.2;
     const double inf = 0x7f800000;
 
-    int blockI = blockIdx.x;
+    uint blockI = blockIdx.x;
     if (blockI >= 27)
         return;
 
@@ -317,7 +316,7 @@ __global__ void energy_all_cell_kernel(double* energy, Particle particle, const 
 
     __syncthreads();
 
-    for (int i = blockDim.x/2; i > 0; i/=2) {
+    for (auto i = blockDim.x/2; i > 0; i/=2) {
         if (threadIdx.x < i)
             part_energy[threadIdx.x] += part_energy[threadIdx.x + i];
         __syncthreads();
@@ -327,9 +326,6 @@ __global__ void energy_all_cell_kernel(double* energy, Particle particle, const 
         energy[blockI] = part_energy[0];
 
 }
-
-
-
 
 
 
@@ -355,7 +351,7 @@ size_t Grid::fill() {
                         (energiesCuda, particle, partPerCellCuda, orderedParticlesCuda.get_array(),
                          cellStartIdxCuda, cudaL, cnCuda, pCellId);
 
-        double *energies = new double[nAdjCells];
+        auto *energies = new double[nAdjCells];
         cudaMemcpy(energies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
 
         for (uint i = 0; i < nAdjCells; i++)
@@ -471,7 +467,7 @@ size_t Grid::move(double dispmax) {
                         (energiesCuda, i, partPerCellCuda, orderedParticlesCuda.get_array(),
                          cellStartIdxCuda, cudaL, cnCuda, init_p_cell_id);
 
-        double *preEnergies = new double[nAdjCells];
+        auto *preEnergies = new double[nAdjCells];
         cudaMemcpy(preEnergies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
 
         double preEnergy = 0.0;
@@ -485,7 +481,7 @@ size_t Grid::move(double dispmax) {
                         (energiesCuda, particle, partPerCellCuda, orderedParticlesCuda.get_array(),
                          cellStartIdxCuda, cudaL, cnCuda, new_p_cell_id);
 
-        double *postEnergies = new double[nAdjCells];
+        auto *postEnergies = new double[nAdjCells];
         cudaMemcpy(postEnergies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
 
         double postEnergy = 0.0;
@@ -499,10 +495,10 @@ size_t Grid::move(double dispmax) {
 
         auto delta_en = preEnergy - postEnergy;
 
-        if (delta_en < 0)
-            accept = true;
-        else if ((double) rand() / RAND_MAX < exp(-beta * delta_en))
+        if (delta_en > 0) {
+            if ((double) rand() / RAND_MAX < exp(-beta * delta_en))
                 accept = true;
+        }
 
         if (!intersected && accept) {
             i.x = particle.x;

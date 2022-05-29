@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <iomanip>
 #include "parse_config.cuh"
 #include "time_measurement.cuh"
 #include "grid.cuh"
@@ -51,7 +52,7 @@ int main(int argc, char* argv[]) {
               << "  ~  "  << to_s(finish_init - start_init) << " s" << std::endl << std::endl;
 
     grid.system_energy();
-    std::cout << "Initial energy = " << grid.get_energy() << std::endl;
+    std::cout << "Initial energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
 
     std::vector<double> prev_rdf;
     if (conf.rdf_step) {
@@ -88,7 +89,7 @@ int main(int argc, char* argv[]) {
         }
         if (conf.energy_step && i % conf.energy_step == 0) {
             grid.system_energy();
-            std::cout << "Energy = " << grid.get_energy() << std::endl;
+            std::cout << "Energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
         }
     }
     auto finish_loop = get_current_time_fenced();
@@ -108,7 +109,7 @@ int main(int argc, char* argv[]) {
 
 
     grid.system_energy();
-    std::cout << "Final energy = " << grid.get_energy() << std::endl;
+    std::cout << "Final energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
 
 
     std::cout << "Loop time: " << to_us(finish_loop - start_loop) << " us"
