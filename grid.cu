@@ -493,13 +493,13 @@ size_t Grid::move(double dispmax) {
         if (postEnergy > 0)
             intersected = true;
 
-        auto delta_en = preEnergy - postEnergy;
+        auto delta_en = postEnergy - preEnergy;
 
         if (delta_en > 0) {
-            accept = true;
-        } else {
             if ((double) rand() / RAND_MAX < exp(-beta * delta_en))
                 accept = true;
+        } else {
+            accept = true;
         }
 
         if (!intersected && accept) {
