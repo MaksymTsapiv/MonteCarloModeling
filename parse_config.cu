@@ -37,5 +37,7 @@ Config Config::from_map(std::map<std::string, double> &config) {
     conf.export_pdb_step = static_cast<size_t>(config["export_pdb_step"]);
     conf.export_cf_step = static_cast<size_t>(config["export_cf_step"]);
     conf.energy_step = static_cast<size_t>(config["energy_step"]);
+
+    conf.temp = static_cast<size_t>(config["temp"]);
     return conf;
 }

@@ -24,6 +24,8 @@ int main(int argc, char* argv[]) {
     auto conf = Config::from_map(config);
 
     Grid grid(conf.Lx, conf.Ly, conf.Lz, D3<uint>{conf.N_cells}, conf.N);
+    grid.setTemp(conf.temp);
+    grid.print_grid_info();
 
     const double dr = 0.1;
     const double rmax = grid.L.x / 2;

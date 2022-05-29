@@ -59,6 +59,7 @@ void Grid::print_grid_info() const {
     std::cout << "Max particles per cell:\t\t" << maxPartPerCell << std::endl;
     std::cout << "Packing fraction:\t\t" << packing_fraction() << std::endl;
     std::cout << "Density:\t\t\t" << density() << std::endl;
+    std::cout << "Temperature:\t\t\t" << temp << std::endl;
     std::cout << "Expected number of particles:\t" << n << std::endl;
     std::cout << "Particle's sigma (diameter):\t" << pSigma << std::endl << std::endl;
 }

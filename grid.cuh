@@ -11,7 +11,7 @@
 #include "d3.cuh"
 #include "array.cuh"
 
-constexpr double SPHERE_PACK_COEFF = 0.9069;
+constexpr double SPHERE_PACK_COEFF = 0.7405;
 constexpr uint nAdjCells = 27;    // Number of neighbouring cells
 
 struct AdjCells { 
@@ -40,8 +40,8 @@ private:
 
     /* Grid particle's sigma -- diameter */
     const double pSigma = 1.0;
-    const double temp = 0.5;
-    const double beta = 1.0/temp;
+    double temp = 1.0;
+    double beta = 1.0/temp;
 
     AdjCells *cn;
 
@@ -101,8 +101,6 @@ public:
         cudaMemcpy(cnCuda, cn, n_cells*sizeof(AdjCells), cudaMemcpyHostToDevice);
 
         cudaMalloc(&partPerCellCuda, n_cells*sizeof(uint));
-
-        print_grid_info();
     }
     ~Grid() {
         cudaFree(cudaL);
@@ -126,6 +124,11 @@ public:
 
     double get_energy() const {
         return energy;
+    }
+
+    void setTemp(double newTemp) {
+        temp = newTemp;
+        beta = 1.0/newTemp;
     }
 
     std::vector<size_t>

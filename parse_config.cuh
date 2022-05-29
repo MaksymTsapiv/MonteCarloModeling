@@ -20,6 +20,8 @@ public:
     int export_cf_step = 0;
     int energy_step = 0;
 
+    double temp = 1.0;
+
     static Config from_map(std::map<std::string, double> &config);
 };
 
