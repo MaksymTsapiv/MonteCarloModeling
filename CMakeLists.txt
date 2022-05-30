@@ -17,8 +17,11 @@ set(CMAKE_CUDA_STANDARD 14)
 # and not CMake options --using options creates too much problem for students.
 
 #  but sometimes it creates too much trouble, so default is OFF.
-set(PROJECT_SOURCES main.cu grid.cu particle.cu parse_config.cu array.cu utils.cu)
-set(PROJECT_HEADERS grid.cuh particle.cuh time_measurement.cuh parse_config.cuh d3.cuh array.cuh utils.cuh)
+set(PROJECT_SOURCES main.cu src/grid.cu src/particle.cu src/parse_config.cu
+													src/array.cu src/utils.cu)
+
+set(PROJECT_HEADERS include/grid.cuh include/particle.cuh include/time_measurement.cuh
+			include/parse_config.cuh include/d3.cuh include/array.cuh include/utils.cuh)
 
 
 
@@ -35,6 +38,7 @@ endif ()
 
 #! Project main executable source compilation
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS})
+target_include_directories(${PROJECT_NAME} PUBLIC include)
 
 #! Add external packages
 #find_package(Threads REQUIRED)
