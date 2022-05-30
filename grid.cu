@@ -657,6 +657,9 @@ export_to_pdb ( const std::string& fn,             // output filename with exten
                 std::string elem_symb,      // 77-78 right
                 std::string charge          // 79-80
               ){
+    // Workaround
+    if (stoi(sn) >= 100000)
+        sn = "99999";
 
     type = check_fill(type, TYPE_MLEN);
     sn = check_fill(sn, SN_MLEN, right);
