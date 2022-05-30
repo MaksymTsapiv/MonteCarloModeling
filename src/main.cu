@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
     grid.print_grid_info();
 
     const double dr = 0.1;
-    const double rmax = grid.L.x / 2;
+    const double rmax = 6.0;
 
 
     std::cout << "Initializing..." << std::endl;
