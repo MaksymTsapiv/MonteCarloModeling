@@ -39,7 +39,7 @@ public:
 
     double distance(int id1, int id2) const;
 
-    idx3d get_cell(Particle p);
+    idx3d get_cell(Particle p) const;
     int get_cell_id(int x, int y, int z) const;
 
     void fill(size_t n);
@@ -47,6 +47,9 @@ public:
     void export_to_pdb(std::string fn);
 
     Particle get_particle(int id) const;
+
+    void assign_cluster();
+    void check_clusterization();
 };
 
 double random_double(double from, double to);

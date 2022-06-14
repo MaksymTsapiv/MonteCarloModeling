@@ -226,6 +226,7 @@ StyleCopReport.xml
 *.ipdb
 *.pgc
 *.pgd
+*.cf
 *.rsp
 *.sbr
 *.tlb

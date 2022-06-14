@@ -4,24 +4,26 @@
 class Particle {
 private:
     double x_cor, y_cor, z_cor, sigma;
-    int id;
+    size_t id, cluster_id;
 
 public:
-    static unsigned int nextId;
+    static size_t nextId;
 
     Particle();
     Particle(double x, double y, double z, double sigma);
 
-    double get_x() const;
-    double get_y() const;
-    double get_z() const;
-    double get_sigma() const;
-    int get_id() const;
+    [[nodiscard]] double get_x() const;
+    [[nodiscard]] double get_y() const;
+    [[nodiscard]] double get_z() const;
+    [[nodiscard]] double get_sigma() const;
+    [[nodiscard]] size_t get_id() const;
+    [[nodiscard]] size_t get_cluster_id() const ;
 
     void set_x(double x);
     void set_y(double y);
     void set_z(double z);
     void set_sigma(double new_sigma);
+    void set_cluster_id(size_t cluster);
 };
 
 #endif //PARTICLE_FILE_H

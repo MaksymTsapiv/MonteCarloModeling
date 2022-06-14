@@ -9,6 +9,7 @@
 #include <random>
 #include <vector>
 #include <iostream>
+#include <cmath>
 #include "grid.h"
 #include "particle.h"
 #include "utils.h"
@@ -21,7 +22,7 @@ Grid::Grid(double x, double y, double z, int dim_cells_) {
     for (int i = 0; i < dim_cells; i++) {
         for (int j = 0; j < dim_cells; j++) {
             for (int k = 0; k < dim_cells; k++) {
-                cells.push_back(Cell(i, j, k));
+                cells.emplace_back(i, j, k);
             }
         }
     }
@@ -109,12 +110,59 @@ std::vector<Particle> Grid::get_particles() const {
     return particles;
 }
 
-idx3d Grid::get_cell(Particle p) {
+idx3d Grid::get_cell(Particle p) const {
     int c_x = static_cast<int>(floor( (p.get_x() / Lx) * dim_cells) );
     int c_y = static_cast<int>(floor( (p.get_y() / Ly) * dim_cells) );
     int c_z = static_cast<int>(floor( (p.get_z() / Lz) * dim_cells) );
     idx3d cell{c_x, c_y, c_z};
     return cell;
+}
+
+
+void Grid::assign_cluster() {
+    const double connect_dist = 1.2;
+
+    for (auto & particle : particles) {
+        auto p_cell = get_cell(particle);
+        auto p_cell_id = get_cell_id(p_cell.x, p_cell.y, p_cell.z);
+        for (auto cell_id : adj_cells[p_cell_id]) {
+            Cell cell = cells[cell_id];
+            for (auto pid : cell.get_particles()) {
+                if (get_particle(pid).get_id() == particle.get_id())
+                    continue;
+                Particle part = get_particle(pid);
+                if (calc_dist(part, particle) <= connect_dist) {
+                    size_t cluster_id1 = particle.get_cluster_id();
+                    size_t cluster_id2 = part.get_cluster_id();
+                    if (cluster_id2 > cluster_id1) {
+                        part.set_cluster_id(cluster_id1);
+                    } else {
+                        particle.set_cluster_id(cluster_id2);
+                    }
+//                    std::cout << "checking for clusters\n";
+//                    part.set_cluster_id(particle.get_cluster_id());
+                }
+            }
+        }
+    }
+}
+
+void Grid::check_clusterization() {
+
+    std::map<size_t, size_t> clusters;
+    for (auto & particle : particles) {
+        auto cluster = particle.get_cluster_id();
+        for (auto & part : particles) {
+            if (particle.get_id() == part.get_id()) continue;
+            if (particle.get_cluster_id() == part.get_cluster_id()) {
+                ++clusters[cluster];
+            }
+        }
+    }
+
+    for (auto & cluster : clusters) {
+        std::cout << cluster.first << " : " << cluster.second << '\n';
+    }
 }
 
 void Grid::fill(size_t n) {
