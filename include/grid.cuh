@@ -178,6 +178,11 @@ public:
     double density() const;
     double packing_fraction() const;
 
+    void dfs_cluster(double connectDist);
+    void check_cluster();
+
+
+
     void compute_adj_cells();
 
     void print_grid_info() const;

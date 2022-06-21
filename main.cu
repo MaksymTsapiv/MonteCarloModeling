@@ -45,6 +45,11 @@ int main(int argc, char* argv[]) {
 
     std::cout << "   Done initializing";
 
+
+    grid.dfs_cluster(1.2);
+    grid.check_cluster();
+
+
     if (!conf.restore)
         std::cout << ". Fill tries: " << fill_res;
 

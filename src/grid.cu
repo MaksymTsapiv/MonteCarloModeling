@@ -8,6 +8,9 @@
 #include <cmath>
 #include <vector>
 #include <iostream>
+#include <map>
+#include <stack>
+#include <algorithm>
 
 #include "grid.cuh"
 #include "particle.cuh"
@@ -378,6 +381,100 @@ size_t Grid::fill() {
 
     return count_tries;
 }
+
+
+
+void Grid::dfs_cluster(double connectDist) {
+    std::vector<int> in_cluster(static_cast<int>(n), 0);
+    std::stack<size_t> pidStack;
+
+    uint* cellStartIdx = new uint[n_cells];
+    Particle* orderedParticles = new Particle[n];
+
+    cudaMemcpy(cellStartIdx, cellStartIdxCuda, sizeof(uint) * n_cells, cudaMemcpyDeviceToHost);
+    cudaMemcpy(orderedParticles, orderedParticlesCuda.get_array(),
+                sizeof(Particle) * n, cudaMemcpyDeviceToHost);
+
+
+    for (auto i = 0; i < n; ++i) {
+        if (in_cluster[i] > 0)
+            continue;
+        const auto particle = particles[i];
+
+        pidStack.push(particle.id);
+        in_cluster[particle.id]++;
+
+        while (!pidStack.empty()) {
+            const auto part = particles[pidStack.top()];
+            const auto parentClusterId = part.clusterId;
+            pidStack.pop();
+
+            std::cout << " " << part.id << std::endl;
+
+            D3<double> p_point = part.get_coord();
+
+            for (auto z_off = -1; z_off <= 1; ++z_off) {
+                for (auto y_off = -1; y_off <= 1; ++y_off) {
+                    for (auto x_off = -1; x_off <= 1; ++x_off) {
+                        cudaMemset(intersectsCuda, 0, sizeof(int));
+                        D3<double> offset = {x_off*cellSize.x, y_off*cellSize.y, z_off*cellSize.z};
+                        size_t curr_cell_id = cell_id(cell(p_point + offset));
+
+                        size_t partInCell = partPerCell[curr_cell_id];
+
+                        if (partInCell == 0)
+                            continue;
+
+                        uint nextCellStartIdx;
+                        if (curr_cell_id+1 == n_cells)
+                            nextCellStartIdx = n_cells;
+                        else
+                            nextCellStartIdx = cellStartIdx[curr_cell_id+1];
+
+                        for (int j = cellStartIdx[curr_cell_id]; j < nextCellStartIdx; ++j) {
+                            auto &currPart = orderedParticles[j];
+                            if (currPart.id == part.id)
+                                continue;
+
+                            auto xd = std::min( fabs(part.x - currPart.x),
+                                    L.x - fabs(part.x - currPart.x) );
+
+                            auto yd = std::min( fabs(part.y - currPart.y),
+                                    L.y - fabs(part.y - currPart.y) );
+
+                            auto zd = std::min( fabs(part.z - currPart.z),
+                                    L.z - fabs(part.z - currPart.z) );
+
+                            auto dist = hypot(hypot(xd, yd), zd);
+
+                            if (dist <= connectDist && !in_cluster[currPart.id]) {
+                                pidStack.push(currPart.id);
+                                in_cluster[currPart.id]++;
+                                orderedParticles[j].clusterId = parentClusterId;
+                                particles[j].clusterId = parentClusterId;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    orderedParticlesCuda.set_data(orderedParticles, n);
+}
+
+
+void Grid::check_cluster() {
+    std::map<size_t, size_t> clusters;
+    for (auto & particle : particles)
+        clusters[particle.clusterId]++;
+
+    for (auto & cluster : clusters)
+        std::cout << cluster.first << " : " << cluster.second << '\n';
+}
+
+
+
 
 __global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id, size_t N) {
     size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
