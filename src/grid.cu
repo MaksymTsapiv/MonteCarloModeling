@@ -215,61 +215,6 @@ check_intersect (
 }
 
 
-__global__ void energy_single_kernel(double* energy, const Particle* particle,
-                                     const Particle *particles, const uint *cellStartIdx, uint curr_cell_id,
-                                     const D3<double> *L, uint curr_part_id, size_t partInCell, size_t arr_size) {
-
-    extern __shared__ double part_energy[];
-
-    const double sqe = -1.0;
-    const double sqw = 0.2;
-    const double inf = 0x7f800000;
-
-    uint startIdx = cellStartIdx[curr_cell_id];
-    uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    auto xd = device_min( fabs(particle->x - particles[startIdx+idx].x),
-                          L->x - fabs(particle->x - particles[startIdx+idx].x) );
-
-    auto yd = device_min( fabs(particle->y - particles[startIdx+idx].y),
-                          L->y - fabs(particle->y - particles[startIdx+idx].y) );
-
-    auto zd = device_min( fabs(particle->z - particles[startIdx+idx].z),
-                          L->z - fabs(particle->z - particles[startIdx+idx].z) );
-
-    auto dist = hypot(hypot(xd, yd), zd);
-
-    if ((dist >= particle->sigma) && (dist < particle->sigma + sqw))
-        part_energy[idx] = sqe;
-    else if (dist < particle->sigma) {
-        if (curr_part_id == particles[startIdx+idx].id)
-            part_energy[idx] = 0.0;
-        else {
-            part_energy[idx] = inf;
-//            printf("Error, intersected. %lu with %lu (cell %i) -- dist = %f\n",
-//                   particle->id, particles[startIdx+idx].id, curr_cell_id, dist);
-        }
-    }
-    else
-        part_energy[idx] = 0;
-
-    __syncthreads();
-
-    if (idx+partInCell < arr_size)
-        part_energy[idx+partInCell] = 0;
-
-    for (auto i = arr_size/2; i > 0; i/=2) {
-        if (idx < i)
-            part_energy[idx] += part_energy[idx + i];
-        __syncthreads();
-    }
-
-    if (idx == 0)
-        *energy = part_energy[0];
-}
-
-
-
 __global__ void energy_all_cell_kernel(double* energy, Particle particle, const uint *partPerCell,
                                        const Particle *particles, const uint *cellStartIdx,
                                        const D3<double> *L,
@@ -409,8 +354,6 @@ void Grid::dfs_cluster(double connectDist) {
             const auto parentClusterId = part.clusterId;
             pidStack.pop();
 
-            std::cout << " " << part.id << std::endl;
-
             D3<double> p_point = part.get_coord();
 
             for (auto z_off = -1; z_off <= 1; ++z_off) {
@@ -524,14 +467,123 @@ check_intersect (
         atomicAdd(intersects, 1);
 }
 
+
+
+/*
+ * Update cluster id of particles1 & particles2. It is supposed to be called on all particles
+ *  in the Grid. It will check if particle is in the cluster that should be changed and
+ *  updates such particles's cluster id.
+ */
+__global__ void update_parts_cluster_kernel(Particle *particles1, Particle *particles2,
+                const size_t* clusterIds, size_t nUniqueClusters, size_t newClusterId, size_t N)
+{
+    uint threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadId >= N)
+        return;
+
+    bool returnFlag = false;
+    // Check if current particle's clusterId is in clusterIds array, so that it should be changed
+    for (size_t i = 0; i < nUniqueClusters; i++) {
+        if (clusterIds[i] == particles1[threadId].clusterId) {
+            particles1[threadId].clusterId = newClusterId;
+            if (returnFlag)
+                return;
+            returnFlag = true;
+        }
+        if (clusterIds[i] == particles2[threadId].clusterId) {
+            particles2[threadId].clusterId = newClusterId;
+            if (returnFlag)
+                return;
+            returnFlag = true;
+        }
+    }
+}
+
+
+
+__global__ void energy_and_cluster_kernel(double* energy, Particle particle, const uint *partPerCell,
+                                       const Particle *particles, const uint *cellStartIdx,
+                                       const D3<double> *L, const AdjCells *adjCells,
+                                       uint currPartCell, int *clusters)
+{
+    extern __shared__ double part_energy[];
+
+    const double sqe = -1.0;
+    const double sqw = 0.2;
+    const double inf = 0x7f800000;
+
+    uint blockI = blockIdx.x;
+    if (blockI >= 27)
+        return;
+
+    uint currCellId = adjCells[currPartCell].ac[blockI];
+    uint startIdx = cellStartIdx[currCellId];
+
+    clusters[blockDim.x * blockI + threadIdx.x] = -1;
+
+    if (threadIdx.x < partPerCell[currCellId]) {
+        auto xd = device_min( fabs(particle.x - particles[startIdx+threadIdx.x].x),
+                              L->x - fabs(particle.x - particles[startIdx+threadIdx.x].x) );
+
+        auto yd = device_min( fabs(particle.y - particles[startIdx+threadIdx.x].y),
+                              L->y - fabs(particle.y - particles[startIdx+threadIdx.x].y) );
+
+        auto zd = device_min( fabs(particle.z - particles[startIdx+threadIdx.x].z),
+                              L->z - fabs(particle.z - particles[startIdx+threadIdx.x].z) );
+
+        auto dist = hypot(hypot(xd, yd), zd);
+
+        if ((dist >= particle.sigma) && (dist < particle.sigma + sqw)) {
+            part_energy[threadIdx.x] = sqe;
+            clusters[blockDim.x * blockI + threadIdx.x] = particles[startIdx+threadIdx.x].clusterId;
+            // printf("   clusters[%i] = %lu\n", blockDim.x * blockI + threadIdx.x, particles[startIdx+threadIdx.x].clusterId);
+        }
+        else if (dist < particle.sigma) {
+            if (particle.id == particles[startIdx+threadIdx.x].id)
+                part_energy[threadIdx.x] = 0.0;
+            else {
+                part_energy[threadIdx.x] = inf;
+            }
+        }
+        else
+            part_energy[threadIdx.x] = 0;
+    }
+    else
+        part_energy[threadIdx.x] = 0;
+
+    __syncthreads();
+
+    for (auto i = blockDim.x/2; i > 0; i/=2) {
+        if (threadIdx.x < i)
+            part_energy[threadIdx.x] += part_energy[threadIdx.x + i];
+        __syncthreads();
+    }
+
+    if (threadIdx.x == 0)
+        energy[blockI] = part_energy[0];
+
+}
+
 size_t Grid::move(double dispmax) {
     uint success = 0;
 
-    for (size_t j = 0; j < n; j++) {
+    /* Contains ids of clusters of particles that interact with the given particle.
+     *  It should be int because if i-th particle doesn't interact with current particle
+     *  clustersIdCuda[i] = -1
+     */
+    int *clustersIdCuda;
+    auto clustersArrSizeBytes = nAdjCells * maxPartPerCell2pow * sizeof(int);
+    cudaMalloc(&clustersIdCuda, clustersArrSizeBytes);
+
+    // Capacity of shared memory. It will be used in configurations upon kernel function call
+    auto sharedMemSizeBytes = maxPartPerCell2pow * sizeof(double);
+
+    for (size_t _ = 0; _ < n; _++) {
+        // std::cout << std::endl << "  Cycle " << _ << std::endl;
         auto &i = particles[random_int(0, n-1)];
 
         D3<int> init_p_cell = cell(i.get_coord());
-        size_t init_p_cell_id = cell_id(init_p_cell);
+        size_t initPCellId = cell_id(init_p_cell);
 
         double new_x = i.x + random_double(-1, 1);
         double new_y = i.y + random_double(-1, 1);
@@ -552,17 +604,18 @@ size_t Grid::move(double dispmax) {
         double z = i.z + vec_z * dispmax;
 
         Particle particle = Particle(x, y, z, pSigma);
+        Particle::nextId--;     // Reset Particle::nextId, because <particle> is temporary particle
         particle.id = i.id;
 
         D3<double> p_point = particle.get_coord();
-        size_t new_p_cell_id = cell_id(cell(p_point));
+        size_t newPCellId = cell_id(cell(p_point));
 
         bool intersected = false;
         bool accept = false;
 
         energy_all_cell_kernel<<<nAdjCells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
                         (energiesCuda, i, partPerCellCuda, orderedParticlesCuda.get_array(),
-                         cellStartIdxCuda, cudaL, cnCuda, init_p_cell_id);
+                         cellStartIdxCuda, cudaL, cnCuda, initPCellId);
 
         auto *preEnergies = new double[nAdjCells];
         cudaMemcpy(preEnergies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
@@ -573,10 +626,9 @@ size_t Grid::move(double dispmax) {
 
         delete[] preEnergies;
 
-
-        energy_all_cell_kernel<<<nAdjCells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
+        energy_and_cluster_kernel<<<nAdjCells, maxPartPerCell2pow, sharedMemSizeBytes>>>
                         (energiesCuda, particle, partPerCellCuda, orderedParticlesCuda.get_array(),
-                         cellStartIdxCuda, cudaL, cnCuda, new_p_cell_id);
+                         cellStartIdxCuda, cudaL, cnCuda, newPCellId, clustersIdCuda);
 
         auto *postEnergies = new double[nAdjCells];
         cudaMemcpy(postEnergies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
@@ -600,52 +652,111 @@ size_t Grid::move(double dispmax) {
         }
 
         if (!intersected && accept) {
+            energy += delta_en;
             i.x = particle.x;
             i.y = particle.y;
             i.z = particle.z;
 
-            if (new_p_cell_id == init_p_cell_id)
-                orderedParticlesCuda.update_particle(i.id, i);
+            int *clusters = new int[nAdjCells * maxPartPerCell2pow];
+            cudaMemcpy(clusters, clustersIdCuda, clustersArrSizeBytes, cudaMemcpyDeviceToHost);
+
+            std::vector<size_t> uniqueClusters;
+
+            for (int j = 0; j < nAdjCells * maxPartPerCell2pow; j++) {
+                if (clusters[j] != -1)
+                    if (std::find(uniqueClusters.begin(), uniqueClusters.end(), clusters[j])
+                                                                        == uniqueClusters.end())
+                        uniqueClusters.push_back(clusters[j]);
+            }
+
+            if (uniqueClusters.size() > 1) {
+                size_t minClusterId = n;
+                for (const auto &clusterId : uniqueClusters)
+                    if (clusterId < minClusterId)
+                        minClusterId = clusterId;
+
+                // Remove minClusterId from uniqueClusters so that uniqueClusters
+                //  contains only clusters that should be changed
+                uniqueClusters.erase(std::find(uniqueClusters.begin(), uniqueClusters.end(),
+                                                                                minClusterId));
+
+                size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
+                size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
+
+                // uniqueClusters size in bytes
+                size_t ucSizeBytes = sizeof(size_t) * uniqueClusters.size();
+                size_t *uniqueClustersCuda;
+                cudaMalloc(&uniqueClustersCuda, ucSizeBytes);
+                cudaMemcpy(uniqueClustersCuda, uniqueClusters.data(), ucSizeBytes,
+                                                            cudaMemcpyHostToDevice);
+
+                /* Copying from host to device & then vice versa to update particles' cluster
+                 *   in both host vector Grid::particles and device array orderedParticlesCuda
+                 *   is a very bad idea, it should be super slow.
+                 * TODO: Redesign it.   HOW?
+                 */
+                Particle *particlesCuda;
+                cudaMalloc(&particlesCuda, n * sizeof(Particle));
+                cudaMemcpy(particlesCuda, particles.data(), n * sizeof(Particle),
+                                                            cudaMemcpyHostToDevice);
+
+                update_parts_cluster_kernel<<<numBlocks, threadsPerBlock>>>
+                            (orderedParticlesCuda.get_mutable_array(), particlesCuda, uniqueClustersCuda,
+                             uniqueClusters.size(), minClusterId, n);
+
+                Particle *particlesTmp = new Particle[n];
+                cudaMemcpy(particlesTmp, particlesCuda, n * sizeof(Particle), cudaMemcpyDeviceToHost);
+                particles = std::vector<Particle>{particlesTmp, particlesTmp + n};
+            }
+
+            if (newPCellId == initPCellId) {
+                auto updateStatus = orderedParticlesCuda.update_particle(i.id, i);
+                if (updateStatus)
+                    throw std::runtime_error("Error in update_particle");
+            }
+
             else {
                 // Cell start index in ordered array for the current particle (which is inserted)
                 uint *partCellStartIdx = new uint;
-                cudaMemcpy(partCellStartIdx, &cellStartIdxCuda[new_p_cell_id], sizeof(uint),
+                cudaMemcpy(partCellStartIdx, &cellStartIdxCuda[newPCellId], sizeof(uint),
                            cudaMemcpyDeviceToHost);
 
-                partPerCell[new_p_cell_id]++;
-                partPerCell[init_p_cell_id]--;
+                partPerCell[newPCellId]++;
+                partPerCell[initPCellId]--;
 
-                cudaMemcpy(&partPerCellCuda[new_p_cell_id], &partPerCell[new_p_cell_id],
+                cudaMemcpy(&partPerCellCuda[newPCellId], &partPerCell[newPCellId],
                                                     sizeof(uint), cudaMemcpyHostToDevice);
-                cudaMemcpy(&partPerCellCuda[init_p_cell_id], &partPerCell[init_p_cell_id],
+                cudaMemcpy(&partPerCellCuda[initPCellId], &partPerCell[initPCellId],
                                                     sizeof(uint), cudaMemcpyHostToDevice);
 
-                int remove_status = orderedParticlesCuda.remove_by_id(i.id);
+                auto remove_status = orderedParticlesCuda.remove_by_id(i.id);
                 if (remove_status)
                     throw std::runtime_error("Error in remove");
 
-                int insert_status = orderedParticlesCuda.insert(i, *partCellStartIdx);
+                auto insert_status = orderedParticlesCuda.insert(i, *partCellStartIdx);
                 if (insert_status)
                     throw std::runtime_error("Error in insert");
 
-                size_t cells_in_range = init_p_cell_id > new_p_cell_id ?
-                            init_p_cell_id - new_p_cell_id : new_p_cell_id - init_p_cell_id;
+                size_t cells_in_range = initPCellId > newPCellId ?
+                            initPCellId - newPCellId : newPCellId - initPCellId;
 
                 size_t threadsPerBlock = std::min(cells_in_range, MAX_BLOCK_THREADS);
                 size_t numBlocks = (cells_in_range + threadsPerBlock - 1) / threadsPerBlock;
 
-                if (init_p_cell_id > new_p_cell_id)
+                if (initPCellId > newPCellId)
                     backward_move_kernel<<<numBlocks, threadsPerBlock>>>
-                                (cellStartIdxCuda, new_p_cell_id, cells_in_range);
+                                (cellStartIdxCuda, newPCellId, cells_in_range);
 
-                else if (init_p_cell_id < new_p_cell_id)
+                else if (initPCellId < newPCellId)
                     forward_move_kernel<<<numBlocks, threadsPerBlock>>>
-                                (cellStartIdxCuda, init_p_cell_id, cells_in_range);
+                                (cellStartIdxCuda, initPCellId, cells_in_range);
 
                 delete partCellStartIdx;
             }
+
             success++;
         }
+
     }
     return success;
 }
