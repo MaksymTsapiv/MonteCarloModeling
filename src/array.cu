@@ -122,6 +122,10 @@ const Particle *OrderedArray::get_array() {
     return data;
 }
 
+Particle *OrderedArray::get_mutable_array() {
+    return data;
+}
+
 size_t OrderedArray::getSize() const {
     return size;
 }
