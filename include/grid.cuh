@@ -181,7 +181,7 @@ public:
     void dfs_cluster(double connectDist);
     void check_cluster();
 
-
+    void cluster_info(double connect_dist);
 
     void compute_adj_cells();
 

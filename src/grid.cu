@@ -389,7 +389,7 @@ void Grid::dfs_cluster(double connectDist) {
     std::stack<size_t> pidStack;
 
     uint* cellStartIdx = new uint[n_cells];
-    Particle* orderedParticles = new Particle[n];
+    auto* orderedParticles = new Particle[n];
 
     cudaMemcpy(cellStartIdx, cellStartIdxCuda, sizeof(uint) * n_cells, cudaMemcpyDeviceToHost);
     cudaMemcpy(orderedParticles, orderedParticlesCuda.get_array(),
@@ -408,8 +408,6 @@ void Grid::dfs_cluster(double connectDist) {
             const auto part = particles[pidStack.top()];
             const auto parentClusterId = part.clusterId;
             pidStack.pop();
-
-            std::cout << " " << part.id << std::endl;
 
             D3<double> p_point = part.get_coord();
 
@@ -672,6 +670,87 @@ void Grid::system_energy() {
     energy /= 2.0;
 }
 
+std::pair<size_t, size_t> biggest_cluster(const std::map<size_t, size_t>& clusters) {
+    size_t part_num = 0;
+    size_t biggest_cluster = 0;
+    for (auto cluster : clusters) {
+        if (cluster.second > part_num) {
+            biggest_cluster = cluster.first;
+            part_num = cluster.second;
+        }
+    }
+    return {biggest_cluster, part_num};
+}
+
+double sphere_volume(double r) {
+    double pi = atan(1) * 4;
+    return 4.0 / 3.0 * pi * pow(r, 3);
+}
+
+bool check_inf_intersect(const double connect_dist, const Particle &particle1, const Particle &particle2, const double &Lx, const double &Ly, const double &Lz) {
+    auto xd = std::min(abs(particle1.x - particle2.x), Lx - abs(particle1.x - particle2.x) );
+
+    auto yd = std::min(abs(particle1.y - particle2.y), Ly - abs(particle1.y - particle2.y) );
+
+    auto zd = std::min(abs(particle1.z - particle2.z), Lz - abs(particle1.z - particle2.z) );
+
+    auto dist = hypot(hypot(xd, yd), zd);
+
+    if (dist <= connect_dist) {
+        return true;
+    } else return false;
+
+}
+
+std::vector<size_t> inf_cluster_search(const std::vector<Particle>& particles, const double connect_dist,
+                                       const double &Lx, const double &Ly, const double &Lz) {
+    std::vector<Particle> candidates;
+    std::map<size_t, std::vector<Particle>> clusters;
+    std::vector<size_t> result;
+
+    for (auto & particle : particles) {
+        if ((std::min(Lx - particle.x, particle.x) < connect_dist) ||
+        (std::min(Ly - particle.y, particle.y) < connect_dist) || (std::min(Lz - particle.z, particle.z) < connect_dist))
+            candidates.push_back(particle);
+    }
+
+    if (candidates.size() < 2) return {};
+
+    for (auto & particle : candidates) {
+        clusters[particle.clusterId].push_back(particle);
+    }
+    if (clusters.size() == candidates.size()) return {};
+    for (const auto & [cluster, parts] : clusters) {
+        for (auto& part1 : parts) {
+            for (auto& part2 : parts) {
+                if (part1.id == part2.id) continue;
+                if ((check_inf_intersect(connect_dist, part1, part2, Lx, Ly, Lz)) &&
+                (std::find(result.begin(), result.end(), cluster) == result.end())) {
+                    result.push_back(cluster);
+                }
+            }
+        }
+    }
+    return result;
+}
+
+
+void Grid::cluster_info(double connect_dist) {
+    std::map<size_t, size_t> clusters;
+
+    for (auto & particle : particles)
+        ++clusters[particle.clusterId];
+
+    std::pair<size_t, size_t> biggest = biggest_cluster(clusters);
+    double biggest_volume = sphere_volume(1.0) * biggest.second;
+    double relative_volume = biggest_volume / (L.x * L.y * L.z);
+
+    auto inf_clusters = inf_cluster_search(particles, connect_dist, L.x, L.y, L.z);
+
+    std::cout << "Biggest cluster: " << biggest.first << ", which consists of " << biggest.second << "particles\n"
+    << "Biggest volume: " << biggest_volume << ", which is " << relative_volume << "% of all volume\n"
+    << "There is " << inf_clusters.size() << " infinite clusters" << std::endl;
+}
 
 enum paramsMLen{
     TYPE_MLEN = 6, SN_MLEN = 5, NAME_MLEN = 4, ALT_LOC_IND_MLEN = 1, RES_NAME_MLEN = 3,

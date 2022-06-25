@@ -43,15 +43,15 @@ int main(int argc, char* argv[]) {
     }
     auto finish_init = get_current_time_fenced();
 
-    std::cout << "   Done initializing";
+    std::cout << "   Done initializing\n";
 
 
-    grid.dfs_cluster(1.2);
-    grid.check_cluster();
-
+    grid.dfs_cluster(conf.connect_dist);
+//    grid.check_cluster();
+    grid.cluster_info(conf.connect_dist);
 
     if (!conf.restore)
-        std::cout << ". Fill tries: " << fill_res;
+        std::cout << "Fill tries: " << fill_res;
 
     std::cout << ". Time: " << to_us(finish_init - start_init) << " us"
               << "  ~  "  << to_s(finish_init - start_init) << " s" << std::endl << std::endl;
