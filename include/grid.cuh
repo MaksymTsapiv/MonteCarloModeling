@@ -151,7 +151,7 @@ public:
     // Returns number of tries
     size_t fill();
     // Returns number of successful moves
-    size_t move(double dispmax);
+    size_t move(double dispmax, int step=0);
     void export_to_pdb(const std::string& fn);
 
     /* Import and export to Custom Format (cf) */
