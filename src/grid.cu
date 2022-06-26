@@ -262,9 +262,6 @@ __global__ void energy_all_cell_kernel(double* energy, Particle particle, const 
     else
         part_energy[threadIdx.x] = 0;
 
-    if (blockI == 20)
-        printf(" 20's block part_energy[%i] = %f\n", threadIdx.x, part_energy[threadIdx.x]);
-
     __syncthreads();
 
     for (auto i = blockDim.x/2; i > 0; i/=2) {
@@ -568,18 +565,18 @@ __global__ void energy_and_cluster_kernel(double* energy, Particle particle, con
 }
 
 __global__ void print_some_parts(const Particle *particles, const uint *cellStartIdx) {
-    for (int i = 0; i < 64; i++){
-        printf("Cell %i : %u\n", i, cellStartIdx[i]);
-    }
-    printf("\n\n");
+    // for (int i = 0; i < 64; i++){
+    //     printf("Cell %i : %u\n", i, cellStartIdx[i]);
+    // }
+    // printf("\n\n");
     for (int i = 0; i < 100; i++){
         auto currPart = particles[cellStartIdx[0]+i];
         printf("%i) %lu: (%f, %f, %f)\n", i, currPart.id, currPart.x, currPart.y, currPart.z);
     }
-    //for (int i = 0; i < 4; i++){
-        //auto currPart = particles[cellStartIdxCuda[11]+i];
-        //printf("%lu: (%f, %f, %f)\n", currPart.id, currPart.x, currPart.y, currPart.z);
-    //}
+    // for (int i = 0; i < 4; i++){
+    //     auto currPart = particles[cellStartIdxCuda[11]+i];
+    //     printf("%lu: (%f, %f, %f)\n", currPart.id, currPart.x, currPart.y, currPart.z);
+    // }
 }
 
 size_t Grid::move(double dispmax, int step) {
@@ -597,16 +594,8 @@ size_t Grid::move(double dispmax, int step) {
     auto sharedMemSizeBytes = maxPartPerCell2pow * sizeof(double);
 
     for (size_t _ = 0; _ < n; _++) {
-        std::cout << std::endl << "  Cycle " << _ << std::endl;
+        std::cout << "Cycle " << _ << std::endl;
         auto &currPart = particles[random_int(0, n-1)];
-
-        if (_ == 92 && step == 6) {
-            print_some_parts<<<1,1>>>(orderedParticlesCuda.get_array(), cellStartIdxCuda);
-            auto part38 = particles[38];
-            std::cout << "38's cell: " << cell_id(cell(part38.get_coord())) << std::endl;
-            auto part82 = particles[82];
-            auto kjfas = 0;
-        }
 
         D3<int> init_p_cell = cell(currPart.get_coord());
         size_t initPCellId = cell_id(init_p_cell);
@@ -681,7 +670,6 @@ size_t Grid::move(double dispmax, int step) {
         }
 
         if (!intersected && accept) {
-            std::cout << std::endl << "Delta energy: " << delta_en << std::endl;
             energy += delta_en;
             currPart.x = particle.x;
             currPart.y = particle.y;
@@ -698,24 +686,6 @@ size_t Grid::move(double dispmax, int step) {
                                                                         == uniqueClusters.end())
                         uniqueClusters.push_back(clusters[j]);
             }
-
-            //double locEnergy = 0.0;
-
-            //{
-                //locEnergy = 0.0;
-                //energy_all_cell_kernel<<<nAdjCells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
-                                //(energiesCuda, currPart, partPerCellCuda, orderedParticlesCuda.get_array(),
-                                 //cellStartIdxCuda, cudaL, cnCuda, initPCellId);
-
-                //auto *locEnergies = new double[nAdjCells];
-                //cudaMemcpy(locEnergies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
-
-                //for (uint k = 0; k < nAdjCells; k++)
-                    //locEnergy += locEnergies[k];
-
-                //delete[] locEnergies;
-            //}
-            //std::cout << "Energy before 1st if: " << locEnergy << std::endl;
 
             if (uniqueClusters.size() > 1) {
                 size_t minClusterId = n;
@@ -757,43 +727,10 @@ size_t Grid::move(double dispmax, int step) {
                 particles = std::vector<Particle>{particlesTmp, particlesTmp + n};
             }
 
-            //{
-                //locEnergy = 0.0;
-
-                //energy_all_cell_kernel<<<nAdjCells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
-                                //(energiesCuda, currPart, partPerCellCuda, orderedParticlesCuda.get_array(),
-                                 //cellStartIdxCuda, cudaL, cnCuda, initPCellId);
-
-                //auto *locEnergies = new double[nAdjCells];
-                //cudaMemcpy(locEnergies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
-
-                //for (uint k = 0; k < nAdjCells; k++)
-                    //locEnergy += locEnergies[k];
-
-                //delete[] locEnergies;
-            //}
-            //std::cout << "Energy after 1st if: " << locEnergy << std::endl;
-
             if (newPCellId == initPCellId) {
                 auto updateStatus = orderedParticlesCuda.update_particle(currPart.id, currPart);
                 if (updateStatus)
                     throw std::runtime_error("Error in update_particle");
-
-                //{
-                    //locEnergy = 0.0;
-                    //energy_all_cell_kernel<<<nAdjCells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
-                                    //(energiesCuda, currPart, partPerCellCuda, orderedParticlesCuda.get_array(),
-                                     //cellStartIdxCuda, cudaL, cnCuda, initPCellId);
-
-                    //auto *locEnergies = new double[nAdjCells];
-                    //cudaMemcpy(locEnergies, energiesCuda, sizeof(double) * nAdjCells, cudaMemcpyDeviceToHost);
-
-                    //for (uint k = 0; k < nAdjCells; k++)
-                        //locEnergy += locEnergies[k];
-
-                    //delete[] locEnergies;
-                //}
-                //std::cout << "Energy in 2nd if: " << locEnergy << std::endl;
             }
 
             else {
@@ -814,7 +751,7 @@ size_t Grid::move(double dispmax, int step) {
                 if (remove_status)
                     throw std::runtime_error("Error in remove");
 
-                auto insert_status = orderedParticlesCuda.insert(currPart, *partCellStartIdx);
+                auto insert_status = orderedParticlesCuda.insert(particle, *partCellStartIdx);
                 if (insert_status)
                     throw std::runtime_error("Error in insert");
 
@@ -834,23 +771,12 @@ size_t Grid::move(double dispmax, int step) {
 
                 delete partCellStartIdx;
             }
-
             success++;
-            std::cout << "Accept" << std::endl;
+            std::cout << "Accepting" << std::endl;
         }
         else
-            std::cout << "Reject" << std::endl;
-
-        std::cout << std::endl << std::endl;
-
-
-
-        if (_ == 92 && step == 6) {
-            print_some_parts<<<1,1>>>(orderedParticlesCuda.get_array(), cellStartIdxCuda);
-            auto part38 = particles[38];
-            auto part82 = particles[82];
-            auto kjfas = 0;
-        }
+            std::cout << "Rejecting" << std::endl;
+        std::cout << std::endl;
     }
     return success;
 }
