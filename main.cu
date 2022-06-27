@@ -43,10 +43,10 @@ int main(int argc, char* argv[]) {
     }
     auto finish_init = get_current_time_fenced();
 
-    std::cout << "   Done initializing";
+    std::cout << "   Done initializing\n";
 
     if (!conf.restore)
-        std::cout << ". Fill tries: " << fill_res;
+        std::cout << "Fill tries: " << fill_res;
 
     std::cout << ". Time: " << to_us(finish_init - start_init) << " us"
               << "  ~  "  << to_s(finish_init - start_init) << " s" << std::endl << std::endl;
@@ -55,9 +55,9 @@ int main(int argc, char* argv[]) {
     std::cout << "Initial energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
 
 
-    grid.dfs_cluster(1.2);
-    std::cout << "Clusters at the beginning:" << std::endl;
-    grid.check_cluster();
+
+    grid.dfs_cluster(conf.connect_dist);
+    grid.cluster_info(conf.connect_dist);
 
 
     std::vector<double> prev_rdf;
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl << "Step " << i << std::endl;
 
         std::cout << "Moving... " << std::endl;
-        auto n_moved = grid.move(conf.dispmax, i);
+        auto n_moved = grid.move(conf.dispmax);
         std::cout << "  Done, moved " << n_moved << std::endl;
 
         if (conf.export_cf_step && i % conf.export_cf_step == 0) {

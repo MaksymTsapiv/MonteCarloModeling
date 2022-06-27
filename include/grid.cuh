@@ -159,7 +159,7 @@ public:
     // Returns number of tries
     size_t fill();
     // Returns number of successful moves
-    size_t move(double dispmax, int step=0);
+    size_t move(double dispmax);
     void export_to_pdb(const std::string& fn);
 
     /* Import and export to Custom Format (cf) */
@@ -189,7 +189,7 @@ public:
     void dfs_cluster(double connectDist);
     void check_cluster();
 
-
+    void cluster_info(double connect_dist);
 
     void compute_adj_cells();
 
