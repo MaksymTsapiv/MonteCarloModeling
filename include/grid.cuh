@@ -85,6 +85,11 @@ public:
 
         maxPartPerCell2pow = pow(2, ceil(log2(maxPartPerCell)));
 
+        if (maxPartPerCell2pow > MAX_BLOCK_THREADS)
+            throw std::runtime_error("Max number of particles per cell (in form of degree of 2) \
+                        is greater then MAX_BLOCK_THREADS. This may cause incorrect execution of \
+                        some kernel functions. Try changing MAX_BLOCK_THREADS or make more cells");
+
         cudaMalloc(&cellStartIdxCuda, sizeof(uint) * n_cells);
         cudaMemset(cellStartIdxCuda, 0, sizeof(uint) * n_cells);
 
@@ -104,8 +109,11 @@ public:
     }
     ~Grid() {
         cudaFree(cudaL);
-        cudaFree(intersectsCuda);
         cudaFree(cellStartIdxCuda);
+        cudaFree(intersectsCuda);
+        cudaFree(energiesCuda);
+        cudaFree(cnCuda);
+        cudaFree(partPerCellCuda);
         free(cn);
     }
     Grid operator=(const Grid &grid) = delete;

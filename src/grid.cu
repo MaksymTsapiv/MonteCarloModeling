@@ -305,6 +305,8 @@ size_t Grid::fill() {
         for (uint i = 0; i < nAdjCells; i++)
             energy_loc += energies[i];
 
+        delete [] energies;
+
         if (energy_loc > 0)
             intersected = true;
 
@@ -404,6 +406,8 @@ void Grid::dfs_cluster(double connectDist) {
     }
 
     orderedParticlesCuda.set_data(orderedParticles, n);
+    delete [] cellStartIdx;
+    delete [] orderedParticles;
 }
 
 
@@ -707,11 +711,6 @@ size_t Grid::move(double dispmax, int step) {
             currPart.y = particle.y;
             currPart.z = particle.z;
 
-            if (_ == 25 && step == 42) {
-                std::cout << currPart.id << ": " << currPart.x << " " << currPart.y << " " << currPart.z << std::endl;
-                std::cout << particle.id << ": " << particle.x << " " << particle.y << " " << particle.z << std::endl;
-            }
-
             int *clusters = new int[nAdjCells * maxPartPerCell2pow];
             cudaMemcpy(clusters, clustersIdCuda, clustersArrSizeBytes, cudaMemcpyDeviceToHost);
 
@@ -723,6 +722,7 @@ size_t Grid::move(double dispmax, int step) {
                                                                         == uniqueClusters.end())
                         uniqueClusters.push_back(clusters[j]);
             }
+            delete [] clusters;
 
             if (uniqueClusters.size() > 1) {
                 size_t minClusterId = n;
@@ -761,7 +761,20 @@ size_t Grid::move(double dispmax, int step) {
 
                 Particle *particlesTmp = new Particle[n];
                 cudaMemcpy(particlesTmp, particlesCuda, n * sizeof(Particle), cudaMemcpyDeviceToHost);
+
                 particles = std::vector<Particle>{particlesTmp, particlesTmp + n};
+
+                cudaFree(particlesCuda);
+                cudaFree(uniqueClustersCuda);
+                delete [] particlesTmp;
+            }
+
+            if (_ == 13939 && step == 1) {
+                std::cout << "Right in accept if" << std::endl;
+                std::cout << currPart.id << ": " << currPart.x << " " << currPart.y << " " << currPart.z << std::endl;
+                std::cout << particle.id << ": " << particle.x << " " << particle.y << " " << particle.z << std::endl;
+                std::cout << "randPartIdx = " << randPartIdx << std::endl;
+                std::cout << particles[randPartIdx].id << ": " << particles[randPartIdx].x << " " << particles[randPartIdx].y << " " << particles[randPartIdx].z << std::endl << std::endl;
             }
 
             /* For some reasons currPart invalidates, so we should take information about
@@ -769,11 +782,15 @@ size_t Grid::move(double dispmax, int step) {
              *  (it is already updated with new coordinates)
              */
             const auto &currPartUpd = particles[randPartIdx];
+
             if (newPCellId == initPCellId) {
-                if (false && (_ == 25 && step == 42)) {
+                if (_ == 13939 && step == 1) {
                     std::cout << "Update" << std::endl;
                     std::cout << currPart.id << ": " << currPart.x << " " << currPart.y << " " << currPart.z << std::endl;
                     std::cout << particle.id << ": " << particle.x << " " << particle.y << " " << particle.z << std::endl;
+                    std::cout << "randPartIdx = " << randPartIdx << std::endl;
+                    std::cout << currPartUpd.id << ": " << currPartUpd.x << " " << currPartUpd.y << " " << currPartUpd.z << std::endl;
+                    std::cout << particles[randPartIdx].id << ": " << particles[randPartIdx].x << " " << particles[randPartIdx].y << " " << particles[randPartIdx].z << std::endl << std::endl;
                 }
                 auto updateStatus = orderedParticlesCuda.update_particle(currPartUpd.id, currPartUpd);
                 if (updateStatus)
@@ -905,6 +922,7 @@ size_t Grid::move(double dispmax, int step) {
 
         std::cout << std::endl;
     }
+    cudaFree(clustersIdCuda);
     return success;
 }
 
