@@ -1019,6 +1019,9 @@ export_to_pdb ( const std::string& fn,      // output filename with extension
     charge = check_fill(charge, CHARGE_MLEN);
 
     std::ofstream pdb_file(fn, std::ofstream::app);
+    if (!pdb_file.is_open())
+        throw std::runtime_error("Error while opening file for pdb export " + fn);
+
     pdb_file << type << sn << " " << name << alt_loc_ind << res_name << " " << chain_ind
              << res_seq_num << res_ins_code << "   " << x << y << z << occ << temp_factor
              << "     " << elem_symb << charge << std::endl;
@@ -1034,12 +1037,11 @@ void Grid::export_to_pdb(const std::string& fn) {
 
         const std::string particle_type = "ATOM";
         const std::string atom_name = "C";
-        const std::string sort_of_elem = std::to_string(1);
-        const std::string temp_factor = focctemp(0);
+        const std::string sort_of_elem = std::to_string(particle.clusterId);
 
         ::export_to_pdb(fn, particle_type, std::to_string(serial_num), atom_name, "", "", "",
                 sort_of_elem, "", fcoord(particle.x), fcoord(particle.y), fcoord(particle.z),
-                focctemp(particle.sigma), temp_factor, "", "", "");
+                focctemp(particle.sigma), focctemp(temp), "", "", "");
         serial_num++;
     }
 }
@@ -1047,7 +1049,7 @@ void Grid::export_to_pdb(const std::string& fn) {
 void Grid::export_to_cf(const std::string& fn) {
     std::ofstream cf_file(fn);
     if (!cf_file)
-        throw std::runtime_error("Error while opening file for export " + fn);
+        throw std::runtime_error("Error while opening file for custom format export " + fn);
 
     for (auto p: particles) {
         char buff[256];

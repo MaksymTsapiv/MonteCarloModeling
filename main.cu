@@ -5,6 +5,8 @@
 #include <fstream>
 #include <cmath>
 #include <iomanip>
+#include <filesystem>
+
 #include "parse_config.cuh"
 #include "time_measurement.cuh"
 #include "grid.cuh"
@@ -32,6 +34,39 @@ int main(int argc, char* argv[]) {
     const double rmax = grid.L.x / 2;
 
 
+
+    std::string dataDirname {"data"};
+    std::string rdfDirPath = dataDirname + "/rdf";
+    std::string cfDirPath = dataDirname + "/cf";
+    std::string pdbDirPath = dataDirname + "/pdb";
+
+    std::filesystem::remove_all(dataDirname);
+
+    auto mkdirStatus = std::filesystem::create_directory(dataDirname);
+    if (!mkdirStatus)
+        throw std::runtime_error("Failed creating directory for data " + dataDirname);
+
+    if (conf.rdf_step) {
+        // TODO: Is / crossplatform?
+        auto mkdirStatus = std::filesystem::create_directory(rdfDirPath);
+        if (!mkdirStatus)
+            throw std::runtime_error("Failed creating directory for rdf: " + rdfDirPath);
+    }
+
+    if (conf.export_cf_step) {
+        auto mkdirStatus = std::filesystem::create_directory(cfDirPath);
+        if (!mkdirStatus)
+            throw std::runtime_error("Failed creating directory for cf: " + cfDirPath);
+    }
+
+    if (conf.export_pdb_step) {
+        auto mkdirStatus = std::filesystem::create_directory(pdbDirPath);
+        if (!mkdirStatus)
+            throw std::runtime_error("Failed creating directory for pdb: " + pdbDirPath);
+    }
+
+
+
     std::cout << "Initializing..." << std::endl;
     size_t fill_res = 0;
     auto start_init = get_current_time_fenced();
@@ -39,7 +74,8 @@ int main(int argc, char* argv[]) {
         grid.import_from_cf("init.cf");
     else {
         fill_res = grid.fill();
-        grid.export_to_cf("init.cf");
+        if (conf.export_cf_step)
+            grid.export_to_cf(cfDirPath + "/init.cf");
     }
     auto finish_init = get_current_time_fenced();
 
@@ -78,24 +114,25 @@ int main(int argc, char* argv[]) {
 
         if (conf.export_cf_step && i % conf.export_cf_step == 0) {
             std::cout << "Exporting to custom format... " << std::endl;
-            grid.export_to_cf("step_" + std::to_string(i) + ".cf");
+            grid.export_to_cf(cfDirPath + "/step_" + std::to_string(i) + ".cf");
             std::cout << "  Done" << std::endl;
         }
         if (conf.export_pdb_step && i % conf.export_pdb_step == 0) {
             std::cout << "Exporting to pdb... " << std::endl;
-            grid.export_to_pdb("step_" + std::to_string(i) + ".pdb");
+            grid.export_to_pdb(pdbDirPath + "/step_" + std::to_string(i) + ".pdb");
             std::cout << "  Done" << std::endl;
         }
         if (conf.rdf_step && i % conf.rdf_step == 0) {
             std::cout << "Calculating and saving RDF... " << std::endl;
             auto rdf = compute_rdf(grid, dr, rmax, prev_rdf);
             prev_rdf = rdf;
-            save_rdf_to_file(rdf, dr, rmax, "rdf_step_" + std::to_string(i) + ".dat");
+            save_rdf_to_file(rdf, dr, rmax, rdfDirPath + "/rdf_step_" + std::to_string(i) + ".dat");
             std::cout << "  Done" << std::endl;
         }
         if (conf.energy_step && i % conf.energy_step == 0) {
             std::cout << "Energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
         }
+        grid.cluster_info(conf.connect_dist);
     }
     auto finish_loop = get_current_time_fenced();
 
@@ -103,8 +140,11 @@ int main(int argc, char* argv[]) {
     grid.check_cluster();
 
     std::cout << "Exporting final system to custom format and pdb... " << std::endl;
-    grid.export_to_pdb("final.pdb");
-    grid.export_to_cf("final.cf");
+    if (conf.export_pdb_step)
+        grid.export_to_pdb(pdbDirPath + "/final.pdb");
+
+    if (conf.export_cf_step)
+        grid.export_to_cf(cfDirPath + "/final.cf");
     std::cout << "  Done" << std::endl;
 
     if (conf.rdf_step) {
