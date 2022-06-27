@@ -332,8 +332,8 @@ size_t Grid::fill() {
         count_tries++;
     }
     if (n != de_facto_n())
-        throw std::runtime_error("Actual number of particles <de_facto_n()> in grid\
-                is not equal to desired number of particles <n> after fill");
+        throw std::runtime_error("Actual number of particles <de_facto_n()> in grid "
+                "is not equal to desired number of particles <n> after fill");
 
     cudaMemcpy(partPerCellCuda, partPerCell, sizeof(uint)*n_cells, cudaMemcpyHostToDevice);
 
@@ -343,6 +343,7 @@ size_t Grid::fill() {
 
 
 void Grid::dfs_cluster(double connectDist) {
+    // Vector of 0 and 1 to indicate whether particle is already in cluster
     std::vector<int> in_cluster(static_cast<int>(n), 0);
     std::stack<size_t> pidStack;
 
@@ -366,6 +367,8 @@ void Grid::dfs_cluster(double connectDist) {
             const auto part = particles[pidStack.top()];
             const auto parentClusterId = part.clusterId;
             pidStack.pop();
+
+            clustersTaken[parentClusterId] = 1;
 
             D3<double> p_point = part.get_coord();
 
@@ -522,7 +525,9 @@ update_parts_cluster_kernel (
 
 
 /*
- * Similar to energy_kernel, but also finds clusters
+ * Similar to energy_kernel, but also finds clusters.
+ * It won't add this <particle>'s clusterId into <clusters> array,
+ *   so when <particle> quits cluster, all entries of <clusters> array will be set to -1
  */
 __global__ void
 energy_and_cluster_kernel (
@@ -565,7 +570,8 @@ energy_and_cluster_kernel (
 
         if ((dist >= particle.sigma) && (dist < particle.sigma + sqw)) {
             part_energy[threadIdx.x] = sqe;
-            clusters[blockDim.x * blockI + threadIdx.x] = particles[startIdx+threadIdx.x].clusterId;
+            if (particle.id != particles[startIdx+threadIdx.x].id)
+                clusters[blockDim.x * blockI + threadIdx.x] = particles[startIdx+threadIdx.x].clusterId;
         }
         else if (dist < particle.sigma) {
             if (particle.id == particles[startIdx+threadIdx.x].id)
@@ -656,9 +662,9 @@ size_t Grid::move(double dispmax) {
         delete[] preEnergies;
 
         if (preEnergy > 0)
-            throw std::runtime_error("preEnergy > 0, which means that some particles have \
-                                        intersected and it was not caught previously. \
-                                        Phantom change of particle(s) or error somewhere else");
+            throw std::runtime_error("preEnergy > 0, which means that some particles have "
+                                        "intersected and it was not caught previously. "
+                                        "Phantom change of particle(s) or error somewhere else");
 
         energy_and_cluster_kernel<<<nAdjCells, maxPartPerCell2pow, sharedMemSizeBytes>>>
                         (energiesCuda, particle, orderedParticlesCuda.get_array(), partPerCellCuda,
@@ -749,6 +755,23 @@ size_t Grid::move(double dispmax) {
                 cudaFree(particlesCuda);
                 cudaFree(uniqueClustersCuda);
                 delete [] particlesTmp;
+            }
+            else if (uniqueClusters.size() == 0) {
+                bool foundFree = false;
+                for (auto i = 0; i < n; i++) {
+                    if (clustersTaken[i] == 0) {
+                        foundFree = true;
+                        currPart.clusterId = i;
+                        clustersTaken[i] = 1;
+                        break;
+                    }
+                }
+
+                if (!foundFree)
+                    throw std::runtime_error("Error: haven't found free cluster for particle when "
+                            "it quited its old cluster. This is impossible, because initially "
+                            "there is n vacant clusters. This means cluster is not marked as "
+                            "free when particle quits it");
             }
 
             /* For some reasons currPart invalidates, so we should take information about
@@ -1082,8 +1105,8 @@ void Grid::import_from_cf(const std::string& fn) {
     cf_file.close();
 
     if (particles.size() != n)
-        throw std::invalid_argument("During import: too many particles in CF file.\
-                Either grid is badly preconfigured or CF file is corrupted.");
+        throw std::invalid_argument("Error during import: too many particles in CF file. "
+                "Either grid is badly preconfigured or CF file is corrupted.");
 }
 
 void Grid::complex_insert(Particle p) {

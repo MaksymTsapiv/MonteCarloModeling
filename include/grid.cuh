@@ -29,9 +29,6 @@ private:
     /* Number of particles in each cell */
     uint *partPerCell;
 
-    /* number of particle in system */
-    size_t n = 0;
-
     /* number of cells in system */
     size_t n_cells = 0;
     uint maxPartPerCell = 0;
@@ -46,7 +43,6 @@ private:
     AdjCells *cn;
 
     /************************ On GPU ************************/
-
     AdjCells *cnCuda;
     uint *partPerCellCuda;
 
@@ -63,6 +59,17 @@ private:
     /********************************************************/
 
 public:
+
+    /* Size of grid */
+    D3<double> L {0.0};
+
+    /* number of particle in system */
+    size_t n = 0;
+
+    /* Indicator array which clusters ids are taken */
+    int *clustersTaken;
+
+
     Grid(double x, double y, double z, D3<uint> dim_cells_, size_t n_particles) :
         orderedParticlesCuda(n_particles), n(n_particles), dimCells{dim_cells_}
     {
@@ -99,13 +106,16 @@ public:
         cudaMalloc(&energiesCuda, nAdjCells*sizeof(double));
         cudaMemset(energiesCuda, 0, nAdjCells*sizeof(double));
 
-        cn = (AdjCells*) malloc(n_cells*sizeof(AdjCells));
+        cn = new AdjCells[n_cells];;
         compute_adj_cells();
 
         cudaMalloc(&cnCuda, n_cells*sizeof(AdjCells));
         cudaMemcpy(cnCuda, cn, n_cells*sizeof(AdjCells), cudaMemcpyHostToDevice);
 
         cudaMalloc(&partPerCellCuda, n_cells*sizeof(uint));
+
+        clustersTaken = new int[n];
+        memset(clustersTaken, 0, n * sizeof(int));
     }
     ~Grid() {
         cudaFree(cudaL);
@@ -114,11 +124,11 @@ public:
         cudaFree(energiesCuda);
         cudaFree(cnCuda);
         cudaFree(partPerCellCuda);
-        free(cn);
+        delete [] cn;
+        delete [] clustersTaken;
+        delete [] partPerCell;
     }
     Grid operator=(const Grid &grid) = delete;
-
-    D3<double> L {0.0};
 
     template<typename T>
     D3<T> normalize(D3<T> p) const;
