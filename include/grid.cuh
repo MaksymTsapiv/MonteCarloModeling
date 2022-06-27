@@ -80,8 +80,8 @@ public:
         partPerCell = new uint[n_cells];
         memset(partPerCell, 0, sizeof(uint) * n_cells);
 
-        maxPartPerCell = SPHERE_PACK_COEFF * (3.0 * cellSize.x*cellSize.y*cellSize.z)/
-                                    (4.0 * M_PI * pow(static_cast<double>(pSigma)/2.0, 3));
+        maxPartPerCell = ceil(SPHERE_PACK_COEFF * (3.0 * cellSize.x*cellSize.y*cellSize.z)/
+                                    (4.0 * M_PI * pow(static_cast<double>(pSigma)/2.0, 3)));
 
         maxPartPerCell2pow = pow(2, ceil(log2(maxPartPerCell)));
 
