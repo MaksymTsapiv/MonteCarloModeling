@@ -80,10 +80,15 @@ public:
         partPerCell = new uint[n_cells];
         memset(partPerCell, 0, sizeof(uint) * n_cells);
 
-        maxPartPerCell = SPHERE_PACK_COEFF * (3.0 * cellSize.x*cellSize.y*cellSize.z)/
-                                    (4.0 * M_PI * pow(static_cast<double>(pSigma)/2.0, 3));
+        maxPartPerCell = ceil(SPHERE_PACK_COEFF * (3.0 * cellSize.x*cellSize.y*cellSize.z)/
+                                    (4.0 * M_PI * pow(static_cast<double>(pSigma)/2.0, 3)));
 
         maxPartPerCell2pow = pow(2, ceil(log2(maxPartPerCell)));
+
+        if (maxPartPerCell2pow > MAX_BLOCK_THREADS)
+            throw std::runtime_error("Max number of particles per cell (in form of degree of 2) \
+                        is greater then MAX_BLOCK_THREADS. This may cause incorrect execution of \
+                        some kernel functions. Try changing MAX_BLOCK_THREADS or make more cells");
 
         cudaMalloc(&cellStartIdxCuda, sizeof(uint) * n_cells);
         cudaMemset(cellStartIdxCuda, 0, sizeof(uint) * n_cells);
@@ -104,8 +109,11 @@ public:
     }
     ~Grid() {
         cudaFree(cudaL);
-        cudaFree(intersectsCuda);
         cudaFree(cellStartIdxCuda);
+        cudaFree(intersectsCuda);
+        cudaFree(energiesCuda);
+        cudaFree(cnCuda);
+        cudaFree(partPerCellCuda);
         free(cn);
     }
     Grid operator=(const Grid &grid) = delete;
@@ -177,6 +185,11 @@ public:
     /* density() and packing_fraction() computes value for desired n, not actual */
     double density() const;
     double packing_fraction() const;
+
+    void dfs_cluster(double connectDist);
+    void check_cluster();
+
+    void cluster_info(double connect_dist);
 
     void compute_adj_cells();
 

@@ -43,16 +43,22 @@ int main(int argc, char* argv[]) {
     }
     auto finish_init = get_current_time_fenced();
 
-    std::cout << "   Done initializing";
+    std::cout << "   Done initializing\n";
 
     if (!conf.restore)
-        std::cout << ". Fill tries: " << fill_res;
+        std::cout << "Fill tries: " << fill_res;
 
     std::cout << ". Time: " << to_us(finish_init - start_init) << " us"
               << "  ~  "  << to_s(finish_init - start_init) << " s" << std::endl << std::endl;
 
     grid.system_energy();
     std::cout << "Initial energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
+
+
+
+    grid.dfs_cluster(conf.connect_dist);
+    grid.cluster_info(conf.connect_dist);
+
 
     std::vector<double> prev_rdf;
     if (conf.rdf_step) {
@@ -88,12 +94,13 @@ int main(int argc, char* argv[]) {
             std::cout << "  Done" << std::endl;
         }
         if (conf.energy_step && i % conf.energy_step == 0) {
-            grid.system_energy();
             std::cout << "Energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
         }
     }
     auto finish_loop = get_current_time_fenced();
 
+    std::cout << "Clusters at the end:" << std::endl;
+    grid.check_cluster();
 
     std::cout << "Exporting final system to custom format and pdb... " << std::endl;
     grid.export_to_pdb("final.pdb");
@@ -107,8 +114,6 @@ int main(int argc, char* argv[]) {
         std::cout << "  Done" << std::endl;
     }
 
-
-    grid.system_energy();
     std::cout << "Final energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
 
 
