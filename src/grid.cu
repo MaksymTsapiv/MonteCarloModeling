@@ -629,6 +629,11 @@ size_t Grid::move(double dispmax, int step) {
 
         delete[] preEnergies;
 
+        if (preEnergy > 0)
+            throw std::runtime_error("preEnergy > 0, which means that some particles have \
+                                        intersected and it was not caught previously. \
+                                        Phantom change of particle(s) or error somewhere else");
+
         energy_and_cluster_kernel<<<nAdjCells, maxPartPerCell2pow, sharedMemSizeBytes>>>
                         (energiesCuda, particle, partPerCellCuda, orderedParticlesCuda.get_array(),
                          cellStartIdxCuda, cudaL, cnCuda, newPCellId, clustersIdCuda);
