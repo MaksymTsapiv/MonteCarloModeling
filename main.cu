@@ -72,9 +72,6 @@ int main(int argc, char* argv[]) {
     for (auto i = 1; i <= conf.N_steps; ++i) {
         std::cout << std::endl << "Step " << i << std::endl;
 
-        if (i == 7)
-            auto aksdk = 0;
-
         std::cout << "Moving... " << std::endl;
         auto n_moved = grid.move(conf.dispmax, i);
         std::cout << "  Done, moved " << n_moved << std::endl;
@@ -99,13 +96,11 @@ int main(int argc, char* argv[]) {
         if (conf.energy_step && i % conf.energy_step == 0) {
             std::cout << "Energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
         }
-        std::cout << "Clusters: " << std::endl;
-        grid.check_cluster();
     }
     auto finish_loop = get_current_time_fenced();
 
-    // std::cout << "Clusters at the end:" << std::endl;
-    // grid.check_cluster();
+    std::cout << "Clusters at the end:" << std::endl;
+    grid.check_cluster();
 
     std::cout << "Exporting final system to custom format and pdb... " << std::endl;
     grid.export_to_pdb("final.pdb");

@@ -540,7 +540,6 @@ __global__ void energy_and_cluster_kernel(double* energy, Particle particle, con
         if ((dist >= particle.sigma) && (dist < particle.sigma + sqw)) {
             part_energy[threadIdx.x] = sqe;
             clusters[blockDim.x * blockI + threadIdx.x] = particles[startIdx+threadIdx.x].clusterId;
-            // printf("   clusters[%i] = %lu\n", blockDim.x * blockI + threadIdx.x, particles[startIdx+threadIdx.x].clusterId);
         }
         else if (dist < particle.sigma) {
             if (particle.id == particles[startIdx+threadIdx.x].id)
@@ -551,11 +550,6 @@ __global__ void energy_and_cluster_kernel(double* energy, Particle particle, con
         }
         else
             part_energy[threadIdx.x] = 0;
-        if (particle.id == 83)
-            printf("%lu (%f,%f,%f)   %lu (%f, %f, %f)   Distance = %f\n", particle.id, particle.x,
-                            particle.y, particle.z, particles[startIdx+threadIdx.x].id,
-                            particles[startIdx+threadIdx.x].x, particles[startIdx+threadIdx.x].y,
-                            particles[startIdx+threadIdx.x].z, dist);
     }
     else
         part_energy[threadIdx.x] = 0;
@@ -573,22 +567,6 @@ __global__ void energy_and_cluster_kernel(double* energy, Particle particle, con
 
 }
 
-__global__ void print_some_parts(const Particle *particles, const uint *cellStartIdx) {
-    for (int i = 0; i < 64; i++)
-        printf("Cell %i : %u\n", i, cellStartIdx[i]);
-
-    printf("\n\n");
-
-    for (int i = 0; i < 100; i++){
-        auto currPart = particles[cellStartIdx[0]+i];
-        printf("%i) %lu: (%f, %f, %f)\n", i, currPart.id, currPart.x, currPart.y, currPart.z);
-    }
-    // for (int i = 0; i < 4; i++){
-    //     auto currPart = particles[cellStartIdxCuda[11]+i];
-    //     printf("%lu: (%f, %f, %f)\n", currPart.id, currPart.x, currPart.y, currPart.z);
-    // }
-}
-
 size_t Grid::move(double dispmax, int step) {
     uint success = 0;
 
@@ -604,7 +582,6 @@ size_t Grid::move(double dispmax, int step) {
     auto sharedMemSizeBytes = maxPartPerCell2pow * sizeof(double);
 
     for (size_t _ = 0; _ < n; _++) {
-        std::cout << "Cycle " << _ << " \t Step " << step << std::endl;
         auto randPartIdx = random_int(0, n-1);
         auto &currPart = particles[randPartIdx];
 
@@ -639,26 +616,6 @@ size_t Grid::move(double dispmax, int step) {
         bool intersected = false;
         bool accept = false;
 
-        if (_ == 62 && step == 74) {
-            std::cout << "currPart.id: " << currPart.id << std::endl;
-            auto part1 = particles[55];
-            auto part2 = particles[83];
-
-            auto part1Cell = cell_id(cell(part1.get_coord()));
-            auto part2Cell = cell_id(cell(part2.get_coord()));
-
-            auto xd = min( fabs(part1.x - part2.x), L.x - fabs(part1.x - part2.x) );
-            auto yd = min( fabs(part1.y - part2.y), L.y - fabs(part1.y - part2.y) );
-            auto zd = min( fabs(part1.z - part2.z), L.z - fabs(part1.z - part2.z) );
-
-            auto dist = hypot(hypot(xd, yd), zd);
-            
-            std::cout << part1.id << ": (" << part1.x << ", " << part1.y << ", " << part1.z << ") " << part1Cell << std::endl;
-            std::cout << part2.id << ": (" << part2.x << ", " << part2.y << ", " << part2.z << ") " << part2Cell << std::endl;
-            std::cout << "distance = " << dist << std::endl;
-            print_some_parts<<<1,1>>>(orderedParticlesCuda.get_array(), cellStartIdxCuda);
-        }
-
         energy_all_cell_kernel<<<nAdjCells, maxPartPerCell2pow, maxPartPerCell2pow*sizeof(double)>>>
                         (energiesCuda, currPart, partPerCellCuda, orderedParticlesCuda.get_array(),
                          cellStartIdxCuda, cudaL, cnCuda, initPCellId);
@@ -671,9 +628,6 @@ size_t Grid::move(double dispmax, int step) {
             preEnergy += preEnergies[k];
 
         delete[] preEnergies;
-
-        if (_ == 62 && step == 74)
-            std::cout << "preEnergy: " << preEnergy << std::endl;
 
         energy_and_cluster_kernel<<<nAdjCells, maxPartPerCell2pow, sharedMemSizeBytes>>>
                         (energiesCuda, particle, partPerCellCuda, orderedParticlesCuda.get_array(),
@@ -688,21 +642,17 @@ size_t Grid::move(double dispmax, int step) {
 
         delete[] postEnergies;
 
-        if (_ == 62 && step == 74)
-            std::cout << "postEnergy: " << postEnergy << std::endl;
-
-
         if (postEnergy > 0)
             intersected = true;
 
         auto delta_en = postEnergy - preEnergy;
 
-        if (delta_en > 0) {
+        if (delta_en > 0){
             if ((double) rand() / RAND_MAX < exp(-beta * delta_en))
                 accept = true;
-        } else {
-            accept = true;
         }
+        else
+            accept = true;
 
 
         if (!intersected && accept) {
@@ -769,14 +719,6 @@ size_t Grid::move(double dispmax, int step) {
                 delete [] particlesTmp;
             }
 
-            if (_ == 13939 && step == 1) {
-                std::cout << "Right in accept if" << std::endl;
-                std::cout << currPart.id << ": " << currPart.x << " " << currPart.y << " " << currPart.z << std::endl;
-                std::cout << particle.id << ": " << particle.x << " " << particle.y << " " << particle.z << std::endl;
-                std::cout << "randPartIdx = " << randPartIdx << std::endl;
-                std::cout << particles[randPartIdx].id << ": " << particles[randPartIdx].x << " " << particles[randPartIdx].y << " " << particles[randPartIdx].z << std::endl << std::endl;
-            }
-
             /* For some reasons currPart invalidates, so we should take information about
              *  this particle once again from the Grid's vector of particles
              *  (it is already updated with new coordinates)
@@ -784,14 +726,6 @@ size_t Grid::move(double dispmax, int step) {
             const auto &currPartUpd = particles[randPartIdx];
 
             if (newPCellId == initPCellId) {
-                if (_ == 13939 && step == 1) {
-                    std::cout << "Update" << std::endl;
-                    std::cout << currPart.id << ": " << currPart.x << " " << currPart.y << " " << currPart.z << std::endl;
-                    std::cout << particle.id << ": " << particle.x << " " << particle.y << " " << particle.z << std::endl;
-                    std::cout << "randPartIdx = " << randPartIdx << std::endl;
-                    std::cout << currPartUpd.id << ": " << currPartUpd.x << " " << currPartUpd.y << " " << currPartUpd.z << std::endl;
-                    std::cout << particles[randPartIdx].id << ": " << particles[randPartIdx].x << " " << particles[randPartIdx].y << " " << particles[randPartIdx].z << std::endl << std::endl;
-                }
                 auto updateStatus = orderedParticlesCuda.update_particle(currPartUpd.id, currPartUpd);
                 if (updateStatus)
                     throw std::runtime_error("Error in update_particle");
@@ -803,14 +737,8 @@ size_t Grid::move(double dispmax, int step) {
                 cudaMemcpy(partCellStartIdx, &cellStartIdxCuda[newPCellId], sizeof(uint),
                            cudaMemcpyDeviceToHost);
 
-                if (initPCellId < newPCellId) {
+                if (initPCellId < newPCellId)
                     *partCellStartIdx -= 1;
-                }
-
-                if (_ == 7 && step == 44) {
-                    std::cout << "New: " << newPCellId << ", old: " << initPCellId << std::endl;
-                    std::cout << "Insert index: " << *partCellStartIdx << std::endl;
-                }
 
                 partPerCell[newPCellId]++;
                 partPerCell[initPCellId]--;
@@ -823,13 +751,6 @@ size_t Grid::move(double dispmax, int step) {
                 auto remove_status = orderedParticlesCuda.remove_by_id(currPart.id);
                 if (remove_status)
                     throw std::runtime_error("Error in remove");
-
-
-                if (_ == 25 && step == 42) {
-                    std::cout << "Insert" << std::endl;
-                    std::cout << currPart.id << ": " << currPart.x << " " << currPart.y << " " << currPart.z << std::endl;
-                    std::cout << particle.id << ": " << particle.x << " " << particle.y << " " << particle.z << std::endl;
-                }
 
                 auto insert_status = orderedParticlesCuda.insert(currPartUpd, *partCellStartIdx);
                 if (insert_status)
@@ -852,75 +773,7 @@ size_t Grid::move(double dispmax, int step) {
                 delete partCellStartIdx;
             }
             success++;
-            std::cout << "Accepting" << std::endl;
-            
-            // if (_ == 73 && step == 74) {
-            //     std::cout << "currPart.id: " << currPart.id << std::endl;
-            //     auto part1 = particles[55];
-            //     auto part2 = particles[83];
-
-            //     auto part1Cell = cell_id(cell(part1.get_coord()));
-            //     auto part2Cell = cell_id(cell(part2.get_coord()));
-
-            //     auto xd = min( fabs(part1.x - part2.x), L.x - fabs(part1.x - part2.x) );
-            //     auto yd = min( fabs(part1.y - part2.y), L.y - fabs(part1.y - part2.y) );
-            //     auto zd = min( fabs(part1.z - part2.z), L.z - fabs(part1.z - part2.z) );
-
-            //     auto dist = hypot(hypot(xd, yd), zd);
-            //     
-            //     std::cout << part1.id << ": (" << part1.x << ", " << part1.y << ", " << part1.z << ") " << part1Cell << std::endl;
-            //     std::cout << part2.id << ": (" << part2.x << ", " << part2.y << ", " << part2.z << ") " << part2Cell << std::endl;
-            //     std::cout << "distance = " << dist << std::endl;
-            //     print_some_parts<<<1,1>>>(orderedParticlesCuda.get_array(), cellStartIdxCuda);
-            // }
         }
-        else
-            std::cout << "Rejecting" << std::endl;
-
-        // if (_ == 73 && step == 74) {
-        //     std::cout << "currPart.id: " << currPart.id << std::endl;
-        //     auto part1 = particles[55];
-        //     auto part2 = particles[83];
-
-        //     auto part1Cell = cell_id(cell(part1.get_coord()));
-        //     auto part2Cell = cell_id(cell(part2.get_coord()));
-
-        //     auto xd = min( fabs(part1.x - part2.x), L.x - fabs(part1.x - part2.x) );
-        //     auto yd = min( fabs(part1.y - part2.y), L.y - fabs(part1.y - part2.y) );
-        //     auto zd = min( fabs(part1.z - part2.z), L.z - fabs(part1.z - part2.z) );
-
-        //     auto dist = hypot(hypot(xd, yd), zd);
-        //     
-        //     std::cout << part1.id << ": (" << part1.x << ", " << part1.y << ", " << part1.z << ") " << part1Cell << std::endl;
-        //     std::cout << part2.id << ": (" << part2.x << ", " << part2.y << ", " << part2.z << ") " << part2Cell << std::endl;
-        //     std::cout << "distance = " << dist << std::endl;
-        //     print_some_parts<<<1,1>>>(orderedParticlesCuda.get_array(), cellStartIdxCuda);
-        // }
-
-        if (_ == 62 && step == 74) {
-            auto part1 = particles[55];
-            auto part2 = particles[83];
-
-            auto part1Cell = cell_id(cell(part1.get_coord()));
-            auto part2Cell = cell_id(cell(part2.get_coord()));
-
-            auto xd = min( fabs(part1.x - part2.x), L.x - fabs(part1.x - part2.x) );
-            auto yd = min( fabs(part1.y - part2.y), L.y - fabs(part1.y - part2.y) );
-            auto zd = min( fabs(part1.z - part2.z), L.z - fabs(part1.z - part2.z) );
-
-            auto dist = hypot(hypot(xd, yd), zd);
-            
-            std::cout << part1.id << ": (" << part1.x << ", " << part1.y << ", " << part1.z << ") " << part1Cell << std::endl;
-            std::cout << part2.id << ": (" << part2.x << ", " << part2.y << ", " << part2.z << ") " << part2Cell << std::endl;
-            std::cout << "distance = " << dist << std::endl;
-        }
-
-
-        // if (_ == 25 && step == 42)
-        //     print_some_parts<<<1,1>>>(orderedParticlesCuda.get_array(), cellStartIdxCuda);
-
-
-        std::cout << std::endl;
     }
     cudaFree(clustersIdCuda);
     return success;
