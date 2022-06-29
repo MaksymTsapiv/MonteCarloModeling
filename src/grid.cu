@@ -288,7 +288,6 @@ energy_kernel (
 
 
 
-
 size_t Grid::fill() {
     size_t count_tries = 0;
     size_t max_tries = 10000 * n;
@@ -409,8 +408,8 @@ void Grid::dfs_cluster(double connectDist) {
                             if (dist <= connectDist && !in_cluster[currPart.id]) {
                                 pidStack.push(currPart.id);
                                 in_cluster[currPart.id]++;
-                                orderedParticles[j].clusterId = parentClusterId;
-                                particles[j].clusterId = parentClusterId;
+                                currPart.clusterId = parentClusterId;
+                                particles[currPart.id].clusterId = parentClusterId;
                             }
                         }
                     }
@@ -599,6 +598,24 @@ energy_and_cluster_kernel (
 
 }
 
+
+__global__ void
+count_cluster_particles (
+        const Particle *particles,
+        size_t N,
+        size_t pivotClusterId,
+        int *count) {
+
+    auto idx = blockDim.x * blockIdx.x + threadIdx.x;
+    if (idx > N)
+        return;
+
+    if (particles[idx].clusterId == pivotClusterId) {
+        // printf("%i: %lu\n", idx, particles[idx].clusterId);
+        atomicAdd(count, 1);
+    }
+}
+
 size_t Grid::move(double dispmax) {
     uint success = 0;
 
@@ -614,7 +631,7 @@ size_t Grid::move(double dispmax) {
     auto sharedMemSizeBytes = maxPartPerCell2pow * sizeof(double);
 
     for (size_t _ = 0; _ < n; _++) {
-        auto randPartIdx = random_int(0, n-1);
+        const auto randPartIdx = random_int(0, n-1);
         auto &currPart = particles[randPartIdx];
 
         D3<int> init_p_cell = cell(currPart.get_coord());
@@ -711,16 +728,21 @@ size_t Grid::move(double dispmax) {
             }
             delete [] clusters;
 
+            /* After move, particle belongs to multiple clusters, so we need to merge them */
             if (uniqueClusters.size() > 1) {
                 size_t minClusterId = n;
                 for (const auto &clusterId : uniqueClusters)
                     if (clusterId < minClusterId)
                         minClusterId = clusterId;
 
-                // Remove minClusterId from uniqueClusters so that uniqueClusters
-                //  contains only clusters that should be changed
+                /* Remove minClusterId from uniqueClusters so that uniqueClusters
+                 *  contains only clusters that should be changed
+                 */
                 uniqueClusters.erase(std::find(uniqueClusters.begin(), uniqueClusters.end(),
                                                                                 minClusterId));
+
+                for (auto clustId : uniqueClusters)
+                    clustersTaken[clustId] = 0;
 
                 size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
                 size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
@@ -756,22 +778,49 @@ size_t Grid::move(double dispmax) {
                 cudaFree(uniqueClustersCuda);
                 delete [] particlesTmp;
             }
+            /* Particle has quited its old cluster and hasn't joined in a new cluster */
             else if (uniqueClusters.size() == 0) {
-                bool foundFree = false;
-                for (auto i = 0; i < n; i++) {
-                    if (clustersTaken[i] == 0) {
-                        foundFree = true;
-                        currPart.clusterId = i;
-                        clustersTaken[i] = 1;
-                        break;
+                int *nPartInClusterCuda;
+                cudaMalloc(&nPartInClusterCuda, sizeof(int));
+                cudaMemset(nPartInClusterCuda, 0, sizeof(int));
+
+                size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
+                size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
+                count_cluster_particles<<<numBlocks, threadsPerBlock>>>
+                    (orderedParticlesCuda.get_array(), n, currPart.clusterId, nPartInClusterCuda);
+
+
+                int *nPartInCluster = new int;
+                cudaMemcpy(nPartInCluster, nPartInClusterCuda, sizeof(int), cudaMemcpyDeviceToHost);
+
+                if (*nPartInCluster == 0)
+                    throw std::runtime_error("Error, 0 particles with clusterId = " +
+                            std::to_string(currPart.clusterId) + " found, which is impossible, "
+                            "because at least one particle -- currPart -- must be there");
+
+                /* Particle was in cluster with other particles, and now it quits them,
+                 *  so we need to assign a new free cluster for it.
+                 */
+                else if (*nPartInCluster > 1) {
+                    bool foundFree = false;
+                    for (auto i = 0; i < n; i++) {
+                        if (clustersTaken[i] == 0) {
+                            foundFree = true;
+                            currPart.clusterId = i;
+                            clustersTaken[i] = 1;
+                            break;
+                        }
                     }
+
+                    if (!foundFree)
+                        throw std::runtime_error("Error: haven't found free cluster for particle when "
+                                "it has quited its old cluster. This is impossible, because "
+                                "there are n vacant clusters. This means cluster is not marked as "
+                                "free when particle quits it.");
                 }
 
-                if (!foundFree)
-                    throw std::runtime_error("Error: haven't found free cluster for particle when "
-                            "it quited its old cluster. This is impossible, because initially "
-                            "there is n vacant clusters. This means cluster is not marked as "
-                            "free when particle quits it");
+                cudaFree(nPartInClusterCuda);
+                delete nPartInCluster;
             }
 
             /* For some reasons currPart invalidates, so we should take information about
