@@ -66,16 +66,17 @@ int main(int argc, char* argv[]) {
     }
 
 
-
-    std::cout << "Initializing..." << std::endl;
+    std::cout << "Initialization: ";
     size_t fill_res = 0;
     auto start_init = get_current_time_fenced();
-    if (conf.restore)
-        grid.import_from_cf("init.cf");
+    if (conf.restore) {
+        std::string restoreFn {"init.cf"};
+        std::cout << "Restoring from file <" << restoreFn << ">..." << std::endl;
+        grid.import_from_cf(restoreFn);
+    }
     else {
+        std::cout << "Filling from scratch..." << std::endl;
         fill_res = grid.fill();
-        if (conf.export_cf_step)
-            grid.export_to_cf(cfDirPath + "/init.cf");
     }
     auto finish_init = get_current_time_fenced();
 
@@ -91,9 +92,20 @@ int main(int argc, char* argv[]) {
     std::cout << "Initial energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
 
 
-
     grid.dfs_cluster(conf.connect_dist);
     grid.cluster_info(conf.connect_dist);
+
+
+    grid.check_cluster();
+
+
+    if (!conf.restore) {
+        if (conf.export_cf_step)
+            grid.export_to_cf(cfDirPath + "/init.cf");
+        if (conf.export_pdb_step)
+            grid.export_to_pdb(pdbDirPath + "/init.pdb");
+    }
+
 
 
     std::vector<double> prev_rdf;
