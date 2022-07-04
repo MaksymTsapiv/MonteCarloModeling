@@ -34,7 +34,6 @@ int main(int argc, char* argv[]) {
     const double rmax = grid.L.x / 2;
 
 
-
     std::string dataDirname {"data"};
     std::string rdfDirPath = dataDirname + "/rdf";
     std::string cfDirPath = dataDirname + "/cf";
@@ -80,7 +79,7 @@ int main(int argc, char* argv[]) {
     }
     auto finish_init = get_current_time_fenced();
 
-    std::cout << "   Done initializing\n";
+    std::cout << "   Done initializing" << std::endl;
 
     if (!conf.restore)
         std::cout << "Fill tries: " << fill_res;
@@ -92,20 +91,12 @@ int main(int argc, char* argv[]) {
     std::cout << "Initial energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
 
 
-    grid.dfs_cluster(conf.connect_dist);
-    grid.cluster_info(conf.connect_dist);
-
-
-    grid.check_cluster();
-
-
     if (!conf.restore) {
         if (conf.export_cf_step)
             grid.export_to_cf(cfDirPath + "/init.cf");
         if (conf.export_pdb_step)
             grid.export_to_pdb(pdbDirPath + "/init.pdb");
     }
-
 
 
     std::vector<double> prev_rdf;
@@ -115,6 +106,15 @@ int main(int argc, char* argv[]) {
         save_rdf_to_file(prev_rdf, dr, rmax, "rdf_init.dat");
         std::cout << "  Done" << std::endl;
     }
+
+
+    if (conf.cluster_step) {
+        std::cout << "Initial clusterization..." << std::endl;
+        grid.dfs_cluster(conf.connect_dist);
+        grid.cluster_info(conf.connect_dist);
+        std::cout << "   Done clusterizing" << std::endl;
+    }
+
 
     auto start_loop = get_current_time_fenced();
     for (auto i = 1; i <= conf.N_steps; ++i) {
@@ -144,20 +144,36 @@ int main(int argc, char* argv[]) {
         if (conf.energy_step && i % conf.energy_step == 0) {
             std::cout << "Energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
         }
-        grid.cluster_info(conf.connect_dist);
+        if (conf.cluster_step && i % conf.cluster_step == 0) {
+            std::cout << "Computing clusters... " << std::endl;
+            grid.dfs_cluster(conf.connect_dist);
+            grid.cluster_info(conf.connect_dist);
+            std::cout << "   Done" << std::endl;
+        }
     }
     auto finish_loop = get_current_time_fenced();
 
-    std::cout << "Clusters at the end:" << std::endl;
-    grid.check_cluster();
 
-    std::cout << "Exporting final system to custom format and pdb... " << std::endl;
-    if (conf.export_pdb_step)
+    if (conf.cluster_step) {
+        std::cout << "Final clusterization..." << std::endl;
+        grid.dfs_cluster(conf.connect_dist);
+        grid.cluster_info(conf.connect_dist);
+        std::cout << "   Done clusterizing" << std::endl;
+        std::cout << "Clusters at the end:" << std::endl;
+        grid.check_cluster();
+    }
+
+    if (conf.export_pdb_step) {
+        std::cout << "Exporting final system to custom format..." << std::endl;
         grid.export_to_pdb(pdbDirPath + "/final.pdb");
+        std::cout << "  Done" << std::endl;
+    }
 
-    if (conf.export_cf_step)
+    if (conf.export_cf_step) {
+        std::cout << "Exporting final system to pdb... " << std::endl;
         grid.export_to_cf(cfDirPath + "/final.cf");
-    std::cout << "  Done" << std::endl;
+        std::cout << "  Done" << std::endl;
+    }
 
     if (conf.rdf_step) {
         std::cout << "Calculating and saving final RDF..." << std::endl;
