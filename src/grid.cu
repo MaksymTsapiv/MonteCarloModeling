@@ -374,7 +374,6 @@ void Grid::dfs_cluster(double connectDist) {
             for (auto z_off = -1; z_off <= 1; ++z_off) {
                 for (auto y_off = -1; y_off <= 1; ++y_off) {
                     for (auto x_off = -1; x_off <= 1; ++x_off) {
-                        cudaMemset(intersectsCuda, 0, sizeof(int));
                         D3<double> offset = {x_off*cellSize.x, y_off*cellSize.y, z_off*cellSize.z};
                         size_t curr_cell_id = cell_id(cell(p_point + offset));
 
@@ -385,7 +384,7 @@ void Grid::dfs_cluster(double connectDist) {
 
                         uint nextCellStartIdx;
                         if (curr_cell_id+1 == n_cells)
-                            nextCellStartIdx = n_cells;
+                            nextCellStartIdx = n;
                         else
                             nextCellStartIdx = cellStartIdx[curr_cell_id+1];
 
@@ -728,8 +727,31 @@ size_t Grid::move(double dispmax) {
             }
             delete [] clusters;
 
+
+            if (uniqueClusters.size() == 1) {
+                int *nPartInClusterCuda;
+                cudaMalloc(&nPartInClusterCuda, sizeof(int));
+                cudaMemset(nPartInClusterCuda, 0, sizeof(int));
+
+                size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
+                size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
+                count_cluster_particles<<<numBlocks, threadsPerBlock>>>
+                    (orderedParticlesCuda.get_array(), n, currPart.clusterId, nPartInClusterCuda);
+
+                int *nPartInCluster = new int;
+                cudaMemcpy(nPartInCluster, nPartInClusterCuda, sizeof(int), cudaMemcpyDeviceToHost);
+
+
+                if (*nPartInCluster == 1) {
+                    if (std::find(uniqueClusters.begin(), uniqueClusters.end(), currPart.clusterId)
+                                                                        == uniqueClusters.end())
+                        uniqueClusters.push_back(currPart.clusterId);
+                }
+            }
+
+
             /* After move, particle belongs to multiple clusters, so we need to merge them */
-            if (uniqueClusters.size() > 1) {
+            if (uniqueClusters.size() >= 1) {
                 size_t minClusterId = n;
                 for (const auto &clusterId : uniqueClusters)
                     if (clusterId < minClusterId)
@@ -992,15 +1014,40 @@ size_t check_for_error(const std::vector<Particle> &particles, const double conn
         clusters[particle.clusterId].push_back(particle);
     }
 
-    for (const auto &[cluster, parts]: clusters) {
-        if (parts.size() != 1) continue;
-        for (auto &particle : particles) {
-            for (auto &part : parts) {
-                if (particle.id == part.id) continue;
-                if (check_intersect(connect_dist, particle, part, Lx, Ly, Lz)) ++error;
+    for (const auto &part1 : particles) {
+        for (const auto &part2 : particles) {
+            if (part1.id == part2.id)
+                continue;
+
+            if (check_inf_intersect(connect_dist, part1, part2, Lx, Ly, Lz)) {
+                if (part1.clusterId != part2.clusterId) {
+                    std::cout << part1.id << " intersected with " << part2.id << std::endl;
+                    ++error;
+                }
             }
         }
     }
+
+    for (const auto &[cluster, parts]: clusters) {
+        if (parts.size() == 1)
+            continue;
+        for (auto &part1 : parts) {
+            auto counter = 0;
+            for (auto &part2 : parts) {
+                if (part1.id == part2.id)
+                    continue;
+
+                if (check_inf_intersect(connect_dist, part1, part2, Lx, Ly, Lz)){
+                    counter++;
+                }
+            }
+            if (counter == 0) {
+                ++error;
+                std::cout << "Yey, error: " << part1.id << " does not belong to the cluster " <<part1.clusterId << " it is currently in" << std::endl;
+            }
+        }
+    }
+
     return error;
 }
 
