@@ -201,9 +201,13 @@ public:
     double packing_fraction() const;
 
     void dfs_cluster(double connectDist);
-    void check_cluster();
 
-    void cluster_info(double connect_dist);
+    /* Currently, there are 3 levels of verbosity:
+     *  verbose=0 prints only essential information and does not check for error
+     *  verbose=1 prints also distribution of sizes of clusters and sizes of each cluster
+     *  verbose=2 prints only essential information but also checks for errors
+     */
+    void cluster_info(double connect_dist, int verbose=0);
 
     void compute_adj_cells();
 

@@ -158,10 +158,8 @@ int main(int argc, char* argv[]) {
     if (conf.cluster_step) {
         std::cout << "Final clusterization..." << std::endl;
         grid.dfs_cluster(conf.connect_dist);
-        grid.cluster_info(conf.connect_dist);
-        std::cout << "   Done clusterizing" << std::endl;
-        std::cout << "Clusters at the end:" << std::endl;
-        // grid.check_cluster();
+        grid.cluster_info(conf.connect_dist, 1);
+        std::cout << "   Done" << std::endl;
     }
 
     if (conf.export_pdb_step) {

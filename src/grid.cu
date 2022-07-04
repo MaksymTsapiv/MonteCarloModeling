@@ -447,17 +447,6 @@ void Grid::dfs_cluster(double connectDist) {
 }
 
 
-void Grid::check_cluster() {
-    std::map<size_t, size_t> clusters;
-    for (auto & particle : particles)
-        clusters[particle.clusterId]++;
-
-    for (auto & cluster : clusters)
-        std::cout << cluster.first << " : " << cluster.second << '\n';
-}
-
-
-
 
 __global__ void backward_move_kernel(uint *cellStartIdx, size_t new_cell_id, size_t N) {
     size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1075,10 +1064,9 @@ size_t check_for_error(const std::vector<Particle> &particles, const double conn
     return error;
 }
 
-void Grid::cluster_info(double connect_dist) {
+void Grid::cluster_info(double connect_dist, int verbose) {
     std::map<size_t, size_t> clusters;
-
-    for (auto & particle : particles)
+    for (const auto &particle : particles)
         ++clusters[particle.clusterId];
 
     std::pair<size_t, size_t> biggest = biggest_cluster(clusters);
@@ -1086,13 +1074,32 @@ void Grid::cluster_info(double connect_dist) {
     double relative_volume = biggest_volume / (L.x * L.y * L.z);
 
     auto inf_clusters = inf_cluster_search(particles, connect_dist, L.x, L.y, L.z);
-    // auto error_check = check_for_error(particles, connect_dist, L.x, L.y, L.z);
 
-    std::cout << "Biggest cluster: " << biggest.first << ", which consists of "
-        << biggest.second << " particles" << std::endl << "Biggest volume: " << biggest_volume
-        << ", which is " << relative_volume << "% of all volume" << std::endl
-        << "There are " << inf_clusters.size() << " infinite clusters" << std::endl;
-    // std::cout << "There are " << error_check << " errors" << std::endl;
+    std::cout << "Number of clusters: \t\t" << clusters.size() << std::endl;
+    std::cout << "Biggest cluster: \t\tid = " << biggest.first << "  size = " << biggest.second
+        << "  volume = " << biggest_volume << " (" << relative_volume << "% of box volume)" << std::endl;
+    std::cout << "Number of infinite clusters: \t" << inf_clusters.size() << std::endl;
+
+    if (verbose == true) {
+        //std::cout << "Cluster sizes: (clusterId : size)" << std::endl;
+        //for (auto & cluster : clusters)
+            //std::cout << " " << cluster.first << " : " << cluster.second << std::endl;
+
+        std::cout << "Distribution of clusters size: (size : count)" << std::endl;
+
+        std::map<size_t, size_t> sizeDistribution;
+        for (const auto &[clustId, clustSize] : clusters)
+            ++sizeDistribution[clustSize];
+
+        for (const auto &[clustSize, nClusts] : sizeDistribution)
+            std::cout << " " << clustSize << " : " << nClusts << std::endl;
+    }
+
+    if (verbose == 2) {
+        std::cout << "Checking for errors..." << std::endl;
+        auto error_check = check_for_error(particles, connect_dist, L.x, L.y, L.z);
+        std::cout << "   Done. " << error_check << " errors" << std::endl;
+    }
 }
 
 enum paramsMLen{
