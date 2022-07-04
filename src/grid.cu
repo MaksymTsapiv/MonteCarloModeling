@@ -937,6 +937,19 @@ bool check_inf_intersect(const double connect_dist, const Particle &particle1, c
 
 }
 
+bool check_intersect(const double connect_dist, const Particle &particle1, const Particle &particle2, const double &Lx, const double &Ly, const double &Lz) {
+    auto xd = abs(particle1.x - particle2.x);
+    auto yd = abs(particle1.y - particle2.y);
+    auto zd = abs(particle1.z - particle2.z);
+
+    auto dist = hypot(hypot(xd, yd), zd);
+
+    if (dist <= connect_dist) {
+        return true;
+    } else return false;
+
+}
+
 std::vector<size_t> inf_cluster_search(const std::vector<Particle>& particles, const double connect_dist,
                                        const double &Lx, const double &Ly, const double &Lz) {
     std::vector<Particle> candidates;
@@ -970,6 +983,27 @@ std::vector<size_t> inf_cluster_search(const std::vector<Particle>& particles, c
 }
 
 
+size_t check_for_error(const std::vector<Particle> &particles, const double connect_dist,
+                      const double &Lx, const double &Ly, const double &Lz) {
+    std::map<size_t, std::vector<Particle>> clusters;
+    size_t error = 0;
+
+    for (auto &particle: particles) {
+        clusters[particle.clusterId].push_back(particle);
+    }
+
+    for (const auto &[cluster, parts]: clusters) {
+        if (parts.size() != 1) continue;
+        for (auto &particle : particles) {
+            for (auto &part : parts) {
+                if (particle.id == part.id) continue;
+                if (check_intersect(connect_dist, particle, part, Lx, Ly, Lz)) ++error;
+            }
+        }
+    }
+    return error;
+}
+
 void Grid::cluster_info(double connect_dist) {
     std::map<size_t, size_t> clusters;
 
@@ -981,11 +1015,13 @@ void Grid::cluster_info(double connect_dist) {
     double relative_volume = biggest_volume / (L.x * L.y * L.z);
 
     auto inf_clusters = inf_cluster_search(particles, connect_dist, L.x, L.y, L.z);
+    auto error_check = check_for_error(particles, connect_dist, L.x, L.y, L.z);
 
     std::cout << "Biggest cluster: " << biggest.first << ", which consists of "
         << biggest.second << " particles" << std::endl << "Biggest volume: " << biggest_volume
         << ", which is " << relative_volume << "% of all volume" << std::endl
-        << "There is " << inf_clusters.size() << " infinite clusters" << std::endl;
+        << "There are " << inf_clusters.size() << " infinite clusters" << std::endl
+        << "There are " << error_check << " errors" << std::endl;
 }
 
 enum paramsMLen{
