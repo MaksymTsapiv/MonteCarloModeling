@@ -346,6 +346,11 @@ void Grid::dfs_cluster(double connectDist) {
     std::vector<int> in_cluster(static_cast<int>(n), 0);
     std::stack<size_t> pidStack;
 
+    memset(clustersTaken, 0, n * sizeof(int));
+
+    for (auto &part : particles)
+        part.clusterId = part.id;
+
     uint* cellStartIdx = new uint[n_cells];
     auto* orderedParticles = new Particle[n];
 
@@ -714,136 +719,136 @@ size_t Grid::move(double dispmax) {
             currPart.y = particle.y;
             currPart.z = particle.z;
 
-            int *clusters = new int[nAdjCells * maxPartPerCell2pow];
-            cudaMemcpy(clusters, clustersIdCuda, clustersArrSizeBytes, cudaMemcpyDeviceToHost);
+            //int *clusters = new int[nAdjCells * maxPartPerCell2pow];
+            //cudaMemcpy(clusters, clustersIdCuda, clustersArrSizeBytes, cudaMemcpyDeviceToHost);
 
-            std::vector<size_t> uniqueClusters;
+            //std::vector<size_t> uniqueClusters;
 
-            for (int j = 0; j < nAdjCells * maxPartPerCell2pow; j++) {
-                if (clusters[j] != -1)
-                    if (std::find(uniqueClusters.begin(), uniqueClusters.end(), clusters[j])
-                                                                        == uniqueClusters.end())
-                        uniqueClusters.push_back(clusters[j]);
-            }
-            delete [] clusters;
-
-
-            if (uniqueClusters.size() == 1) {
-                int *nPartInClusterCuda;
-                cudaMalloc(&nPartInClusterCuda, sizeof(int));
-                cudaMemset(nPartInClusterCuda, 0, sizeof(int));
-
-                size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
-                size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
-                count_cluster_particles<<<numBlocks, threadsPerBlock>>>
-                    (orderedParticlesCuda.get_array(), n, currPart.clusterId, nPartInClusterCuda);
-
-                int *nPartInCluster = new int;
-                cudaMemcpy(nPartInCluster, nPartInClusterCuda, sizeof(int), cudaMemcpyDeviceToHost);
+            //for (int j = 0; j < nAdjCells * maxPartPerCell2pow; j++) {
+                //if (clusters[j] != -1)
+                    //if (std::find(uniqueClusters.begin(), uniqueClusters.end(), clusters[j])
+                                                                        //== uniqueClusters.end())
+                        //uniqueClusters.push_back(clusters[j]);
+            //}
+            //delete [] clusters;
 
 
-                if (*nPartInCluster == 1) {
-                    if (std::find(uniqueClusters.begin(), uniqueClusters.end(), currPart.clusterId)
-                                                                        == uniqueClusters.end())
-                        uniqueClusters.push_back(currPart.clusterId);
-                }
-            }
+            //if (uniqueClusters.size() == 1) {
+                //int *nPartInClusterCuda;
+                //cudaMalloc(&nPartInClusterCuda, sizeof(int));
+                //cudaMemset(nPartInClusterCuda, 0, sizeof(int));
+
+                //size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
+                //size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
+                //count_cluster_particles<<<numBlocks, threadsPerBlock>>>
+                    //(orderedParticlesCuda.get_array(), n, currPart.clusterId, nPartInClusterCuda);
+
+                //int *nPartInCluster = new int;
+                //cudaMemcpy(nPartInCluster, nPartInClusterCuda, sizeof(int), cudaMemcpyDeviceToHost);
+
+
+                //if (*nPartInCluster == 1) {
+                    //if (std::find(uniqueClusters.begin(), uniqueClusters.end(), currPart.clusterId)
+                                                                        //== uniqueClusters.end())
+                        //uniqueClusters.push_back(currPart.clusterId);
+                //}
+            //}
 
 
             /* After move, particle belongs to multiple clusters, so we need to merge them */
-            if (uniqueClusters.size() >= 1) {
-                size_t minClusterId = n;
-                for (const auto &clusterId : uniqueClusters)
-                    if (clusterId < minClusterId)
-                        minClusterId = clusterId;
+            //if (uniqueClusters.size() >= 1) {
+                //size_t minClusterId = n;
+                //for (const auto &clusterId : uniqueClusters)
+                    //if (clusterId < minClusterId)
+                        //minClusterId = clusterId;
 
                 /* Remove minClusterId from uniqueClusters so that uniqueClusters
                  *  contains only clusters that should be changed
                  */
-                uniqueClusters.erase(std::find(uniqueClusters.begin(), uniqueClusters.end(),
-                                                                                minClusterId));
+                //uniqueClusters.erase(std::find(uniqueClusters.begin(), uniqueClusters.end(),
+                                                                                //minClusterId));
 
-                for (auto clustId : uniqueClusters)
-                    clustersTaken[clustId] = 0;
+                //for (auto clustId : uniqueClusters)
+                    //clustersTaken[clustId] = 0;
 
-                size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
-                size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
+                //size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
+                //size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
 
-                // uniqueClusters size in bytes
-                size_t ucSizeBytes = sizeof(size_t) * uniqueClusters.size();
-                size_t *uniqueClustersCuda;
-                cudaMalloc(&uniqueClustersCuda, ucSizeBytes);
-                cudaMemcpy(uniqueClustersCuda, uniqueClusters.data(), ucSizeBytes,
-                                                            cudaMemcpyHostToDevice);
+                //// uniqueClusters size in bytes
+                //size_t ucSizeBytes = sizeof(size_t) * uniqueClusters.size();
+                //size_t *uniqueClustersCuda;
+                //cudaMalloc(&uniqueClustersCuda, ucSizeBytes);
+                //cudaMemcpy(uniqueClustersCuda, uniqueClusters.data(), ucSizeBytes,
+                                                            //cudaMemcpyHostToDevice);
 
                 /* Copying from host to device & then vice versa to update particles' cluster
                  *   in both host vector Grid::particles and device array orderedParticlesCuda
                  *   is a very bad idea, it should be super slow.
                  * TODO: Redesign it.   HOW?
                  */
-                Particle *particlesCuda;
-                cudaMalloc(&particlesCuda, n * sizeof(Particle));
-                cudaMemcpy(particlesCuda, particles.data(), n * sizeof(Particle),
-                                                            cudaMemcpyHostToDevice);
+                //Particle *particlesCuda;
+                //cudaMalloc(&particlesCuda, n * sizeof(Particle));
+                //cudaMemcpy(particlesCuda, particles.data(), n * sizeof(Particle),
+                                                            //cudaMemcpyHostToDevice);
 
-                update_parts_cluster_kernel<<<numBlocks, threadsPerBlock>>>
-                            (orderedParticlesCuda.get_mutable_array(), particlesCuda,
-                             uniqueClustersCuda, uniqueClusters.size(), minClusterId, n);
+                //update_parts_cluster_kernel<<<numBlocks, threadsPerBlock>>>
+                            //(orderedParticlesCuda.get_mutable_array(), particlesCuda,
+                             //uniqueClustersCuda, uniqueClusters.size(), minClusterId, n);
 
-                Particle *particlesTmp = new Particle[n];
-                cudaMemcpy(particlesTmp, particlesCuda, n * sizeof(Particle),
-                                                            cudaMemcpyDeviceToHost);
+                //Particle *particlesTmp = new Particle[n];
+                //cudaMemcpy(particlesTmp, particlesCuda, n * sizeof(Particle),
+                                                            //cudaMemcpyDeviceToHost);
 
-                particles = std::vector<Particle>{particlesTmp, particlesTmp + n};
+                //particles = std::vector<Particle>{particlesTmp, particlesTmp + n};
 
-                cudaFree(particlesCuda);
-                cudaFree(uniqueClustersCuda);
-                delete [] particlesTmp;
-            }
-            /* Particle has quited its old cluster and hasn't joined in a new cluster */
-            else if (uniqueClusters.size() == 0) {
-                int *nPartInClusterCuda;
-                cudaMalloc(&nPartInClusterCuda, sizeof(int));
-                cudaMemset(nPartInClusterCuda, 0, sizeof(int));
+                //cudaFree(particlesCuda);
+                //cudaFree(uniqueClustersCuda);
+                //delete [] particlesTmp;
+            //}
+            //[> Particle has quited its old cluster and hasn't joined in a new cluster <]
+            //else if (uniqueClusters.size() == 0) {
+                //int *nPartInClusterCuda;
+                //cudaMalloc(&nPartInClusterCuda, sizeof(int));
+                //cudaMemset(nPartInClusterCuda, 0, sizeof(int));
 
-                size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
-                size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
-                count_cluster_particles<<<numBlocks, threadsPerBlock>>>
-                    (orderedParticlesCuda.get_array(), n, currPart.clusterId, nPartInClusterCuda);
+                //size_t threadsPerBlock = std::min(n, MAX_BLOCK_THREADS);
+                //size_t numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
+                //count_cluster_particles<<<numBlocks, threadsPerBlock>>>
+                    //(orderedParticlesCuda.get_array(), n, currPart.clusterId, nPartInClusterCuda);
 
 
-                int *nPartInCluster = new int;
-                cudaMemcpy(nPartInCluster, nPartInClusterCuda, sizeof(int), cudaMemcpyDeviceToHost);
+                //int *nPartInCluster = new int;
+                //cudaMemcpy(nPartInCluster, nPartInClusterCuda, sizeof(int), cudaMemcpyDeviceToHost);
 
-                if (*nPartInCluster == 0)
-                    throw std::runtime_error("Error, 0 particles with clusterId = " +
-                            std::to_string(currPart.clusterId) + " found, which is impossible, "
-                            "because at least one particle -- currPart -- must be there");
+                //if (*nPartInCluster == 0)
+                    //throw std::runtime_error("Error, 0 particles with clusterId = " +
+                            //std::to_string(currPart.clusterId) + " found, which is impossible, "
+                            //"because at least one particle -- currPart -- must be there");
 
                 /* Particle was in cluster with other particles, and now it quits them,
                  *  so we need to assign a new free cluster for it.
                  */
-                else if (*nPartInCluster > 1) {
-                    bool foundFree = false;
-                    for (auto i = 0; i < n; i++) {
-                        if (clustersTaken[i] == 0) {
-                            foundFree = true;
-                            currPart.clusterId = i;
-                            clustersTaken[i] = 1;
-                            break;
-                        }
-                    }
+                //else if (*nPartInCluster > 1) {
+                    //bool foundFree = false;
+                    //for (auto i = 0; i < n; i++) {
+                        //if (clustersTaken[i] == 0) {
+                            //foundFree = true;
+                            //currPart.clusterId = i;
+                            //clustersTaken[i] = 1;
+                            //break;
+                        //}
+                    //}
 
-                    if (!foundFree)
-                        throw std::runtime_error("Error: haven't found free cluster for particle when "
-                                "it has quited its old cluster. This is impossible, because "
-                                "there are n vacant clusters. This means cluster is not marked as "
-                                "free when particle quits it.");
-                }
+                    //if (!foundFree)
+                        //throw std::runtime_error("Error: haven't found free cluster for particle when "
+                                //"it has quited its old cluster. This is impossible, because "
+                                //"there are n vacant clusters. This means cluster is not marked as "
+                                //"free when particle quits it.");
+                //}
 
-                cudaFree(nPartInClusterCuda);
-                delete nPartInCluster;
-            }
+                //cudaFree(nPartInClusterCuda);
+                //delete nPartInCluster;
+            //}
 
             /* For some reasons currPart invalidates, so we should take information about
              *  this particle once again from the Grid's vector of particles
@@ -1021,7 +1026,7 @@ size_t check_for_error(const std::vector<Particle> &particles, const double conn
 
             if (check_inf_intersect(connect_dist, part1, part2, Lx, Ly, Lz)) {
                 if (part1.clusterId != part2.clusterId) {
-                    std::cout << part1.id << " intersected with " << part2.id << std::endl;
+                    std::cout << "Error: " << part1.id << " intersected with " << part2.id << std::endl;
                     ++error;
                 }
             }
@@ -1043,7 +1048,7 @@ size_t check_for_error(const std::vector<Particle> &particles, const double conn
             }
             if (counter == 0) {
                 ++error;
-                std::cout << "Yey, error: " << part1.id << " does not belong to the cluster " <<part1.clusterId << " it is currently in" << std::endl;
+                std::cout << "Error: " << part1.id << " does not belong to the cluster " <<part1.clusterId << " it is currently in" << std::endl;
             }
         }
     }
