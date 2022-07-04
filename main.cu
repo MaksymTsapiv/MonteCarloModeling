@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
     if (conf.rdf_step) {
         std::cout << "Calculating and saving initial RDF..." << std::endl;
         prev_rdf = compute_rdf(grid, dr, rmax);
-        save_rdf_to_file(prev_rdf, dr, rmax, "rdf_init.dat");
+        save_rdf_to_file(prev_rdf, dr, rmax, rdfDirPath + "/rdf_init.dat");
         std::cout << "  Done" << std::endl;
     }
 
@@ -143,6 +143,7 @@ int main(int argc, char* argv[]) {
         }
         if (conf.energy_step && i % conf.energy_step == 0) {
             std::cout << "Energy = " << std::setprecision(8) << grid.get_energy() / conf.N << std::endl;
+            grid.writeEnergyToDAT(dataDirname + "/energy.dat", i);
         }
         if (conf.cluster_step && i % conf.cluster_step == 0) {
             std::cout << "Computing clusters... " << std::endl;
@@ -160,7 +161,7 @@ int main(int argc, char* argv[]) {
         grid.cluster_info(conf.connect_dist);
         std::cout << "   Done clusterizing" << std::endl;
         std::cout << "Clusters at the end:" << std::endl;
-        grid.check_cluster();
+        // grid.check_cluster();
     }
 
     if (conf.export_pdb_step) {

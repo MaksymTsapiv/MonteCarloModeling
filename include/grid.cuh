@@ -14,6 +14,8 @@
 constexpr double SPHERE_PACK_COEFF = 0.7405;
 constexpr uint nAdjCells = 27;    // Number of neighbouring cells
 
+constexpr size_t DAT_FIRST_COL_LENGTH = 40;
+
 struct AdjCells { 
     uint ac[nAdjCells];    // id of cell
 };
@@ -148,6 +150,8 @@ public:
         temp = newTemp;
         beta = 1.0/newTemp;
     }
+
+    void writeEnergyToDAT(const std::string &fn, size_t step);
 
     std::vector<size_t>
     check_intersect_cpu(Particle particle);

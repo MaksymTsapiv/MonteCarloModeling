@@ -108,6 +108,25 @@ __device__ double device_min(double a, double b) {
     return a < b ? a : b;
 }
 
+void Grid::writeEnergyToDAT(const std::string &fn, size_t step) {
+    std::ofstream energyFile {fn, std::ofstream::app};
+
+    if (!energyFile.is_open())
+        throw std::runtime_error("Error while opening file for energy " + fn);
+
+    auto stepStr = std::to_string(step);
+    if (stepStr.size() > DAT_FIRST_COL_LENGTH)
+        std::cerr << "Warning: step is so big that it exceeds DAT_FIRST_ROW_LENGTH constexpr. "
+            ".dat file with energy may be corrupted now (consider increasing "
+            "this constexpr, it is save to do so if you need)" << std::endl;
+
+    for (auto i = stepStr.size(); i < DAT_FIRST_COL_LENGTH; i++)
+        stepStr += " ";
+    energyFile << stepStr << " " << std::to_string(energy / n) << std::endl;
+
+    energyFile.close();
+}
+
 std::vector<size_t>
 Grid::check_intersect_cpu(Particle particle) {
     std::vector<size_t> res;
@@ -1067,13 +1086,13 @@ void Grid::cluster_info(double connect_dist) {
     double relative_volume = biggest_volume / (L.x * L.y * L.z);
 
     auto inf_clusters = inf_cluster_search(particles, connect_dist, L.x, L.y, L.z);
-    auto error_check = check_for_error(particles, connect_dist, L.x, L.y, L.z);
+    // auto error_check = check_for_error(particles, connect_dist, L.x, L.y, L.z);
 
     std::cout << "Biggest cluster: " << biggest.first << ", which consists of "
         << biggest.second << " particles" << std::endl << "Biggest volume: " << biggest_volume
         << ", which is " << relative_volume << "% of all volume" << std::endl
-        << "There are " << inf_clusters.size() << " infinite clusters" << std::endl
-        << "There are " << error_check << " errors" << std::endl;
+        << "There are " << inf_clusters.size() << " infinite clusters" << std::endl;
+    // std::cout << "There are " << error_check << " errors" << std::endl;
 }
 
 enum paramsMLen{
