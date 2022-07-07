@@ -1078,13 +1078,17 @@ void Grid::cluster_info(double connect_dist, int verbose) {
 
     std::pair<size_t, size_t> biggest = biggest_cluster(clusters);
     double biggest_volume = sphere_volume(1.0) * biggest.second;
-    double relative_volume = biggest_volume / (L.x * L.y * L.z);
+    double relative_box_volume = biggest_volume / (L.x * L.y * L.z) * 100;
+    double relative_part_volume = biggest_volume / (n * sphere_volume(1.0)) * 100;
 
     auto inf_clusters = inf_cluster_search(particles, connect_dist, L.x, L.y, L.z);
 
     std::cout << "Number of clusters: \t\t" << clusters.size() << std::endl;
+    std::cout << "Average cluster size: \t\t" << n/clusters.size() << std::endl;
     std::cout << "Biggest cluster: \t\tid = " << biggest.first << "  size = " << biggest.second
-        << "  volume = " << biggest_volume << " (" << relative_volume << "% of box volume)" << std::endl;
+        << "/" << n << "  volume = " << biggest_volume << " ("
+        << relative_box_volume << "% of box volume / "
+        << relative_part_volume << "% of total particles volume)" << std::endl;
     std::cout << "Number of infinite clusters: \t" << inf_clusters.size() << std::endl;
 
     if (verbose == true) {
