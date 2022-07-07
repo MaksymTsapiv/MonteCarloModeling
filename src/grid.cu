@@ -1184,8 +1184,11 @@ export_to_pdb ( const std::string& fn,      // output filename with extension
                 std::string charge          // 79-80
               ){
     // Workaround
-    if (stoi(sn) >= 100000)
+    if (sn.size() >= 6)
         sn = "99999";
+
+    if (res_seq_num.size() >= 5)
+        res_seq_num = "9999";
 
     type = check_fill(type, TYPE_MLEN);
     sn = check_fill(sn, SN_MLEN, right);
