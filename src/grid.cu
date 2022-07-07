@@ -667,6 +667,13 @@ size_t Grid::move(double dispmax) {
         double y = currPart.y + vec_y * dispmax;
         double z = currPart.z + vec_z * dispmax;
 
+        if (x < 0) x = x + L.x;
+        if (y < 0) y = y + L.y;
+        if (z < 0) z = z + L.z;
+        if (x >= L.x) x = x - L.x;
+        if (y >= L.y) y = y - L.y;
+        if (z >= L.z) z = z - L.z;
+
         Particle particle = Particle(x, y, z, pSigma);
         Particle::nextId--;     // Reset Particle::nextId, because <particle> is temporary particle
         particle.id = currPart.id;
