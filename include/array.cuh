@@ -25,6 +25,7 @@ public:
     int update_particle(size_t id, Particle part);
 
     const Particle* get_array();
+    Particle* get_mutable_array();
     size_t getSize() const;
 
     void set_data(Particle* data, size_t size);

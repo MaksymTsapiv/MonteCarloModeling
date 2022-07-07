@@ -29,6 +29,7 @@ Config Config::from_map(std::map<std::string, double> &config) {
     conf.Lz = config["Lz"];
     conf.N_steps = static_cast<size_t>(config["N_steps"]);
     conf.dispmax = config["dispmax"];
+    conf.connect_dist = config["connect_dist"];
     conf.N_cells = static_cast<uint>(config["N_cells"]);
     conf.N = static_cast<size_t>(config["N"]);
     conf.restore = static_cast<size_t>(config["restore"]);
@@ -37,6 +38,7 @@ Config Config::from_map(std::map<std::string, double> &config) {
     conf.export_pdb_step = static_cast<size_t>(config["export_pdb_step"]);
     conf.export_cf_step = static_cast<size_t>(config["export_cf_step"]);
     conf.energy_step = static_cast<size_t>(config["energy_step"]);
+    conf.cluster_step = static_cast<size_t>(config["cluster_step"]);
 
     conf.temp = static_cast<size_t>(config["temp"]);
     return conf;

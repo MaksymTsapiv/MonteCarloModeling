@@ -9,7 +9,7 @@ private:
 
 public:
     double x, y, z, sigma;
-    size_t id;
+    size_t id, clusterId;
     static size_t nextId;
 
     Particle();

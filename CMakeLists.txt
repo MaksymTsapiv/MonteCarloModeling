@@ -8,7 +8,7 @@ project(${PROJECT_NAME} LANGUAGES CUDA)
 
 enable_language(CUDA)
 
-set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD 17)
 
 ##########################################################
 # User configurable options of the template

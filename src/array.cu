@@ -23,7 +23,7 @@ OrderedArray::~OrderedArray() {
 }
 
 __global__ void get_particle_index_kernel(
-                Particle *particles, size_t particle_id, uint *index, size_t size)
+                const Particle *particles, size_t particle_id, uint *index, size_t size)
 {
     size_t threadId = blockIdx.x * blockDim.x + threadIdx.x;
     if (threadId >= size)
@@ -119,6 +119,10 @@ int OrderedArray::insert(Particle value, size_t index) {
 }
 
 const Particle *OrderedArray::get_array() {
+    return data;
+}
+
+Particle *OrderedArray::get_mutable_array() {
     return data;
 }
 
