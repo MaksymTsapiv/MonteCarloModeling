@@ -1102,6 +1102,37 @@ void Grid::cluster_info(double connect_dist, int verbose) {
     }
 }
 
+D3<double> cluster_centre_mass(const std::vector<Particle>& particles) {
+    double x = 0;
+    double y = 0;
+    double z = 0;
+
+    for (auto & particle : particles) {
+        x += particle.x;
+        y += particle.y;
+        z += particle.z;
+    }
+    auto size = particles.size();
+
+    return {x / size, y / size, z / size};
+}
+
+std::map<size_t, D3<double>> all_clusters_centre_mass(const std::vector<Particle>& particles, const double connect_dist,
+                                                      const double &Lx, const double &Ly, const double &Lz) {
+    std::map<size_t, std::vector<Particle>> clusters;
+    std::map<size_t, D3<double>> result;
+
+    for (auto &particle: particles) {
+        clusters[particle.clusterId].push_back(particle);
+    }
+
+    for (auto & [cluster, parts] : clusters) {
+        result.insert({cluster, cluster_centre_mass(parts)});
+    }
+
+    return result;
+}
+
 enum paramsMLen{
     TYPE_MLEN = 6, SN_MLEN = 5, NAME_MLEN = 4, ALT_LOC_IND_MLEN = 1, RES_NAME_MLEN = 3,
     CHAIN_IND_MLEN = 1, RES_SEQ_NUM_MLEN = 4, RES_INS_CODE_MLEN = 1,

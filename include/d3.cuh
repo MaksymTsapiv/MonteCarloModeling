@@ -6,7 +6,7 @@ class D3 {
 public:
     T x, y, z;
     __host__ __device__ D3(T x, T y, T z) : x(x), y(y), z(z) {}
-    explicit D3(T val) : x(val), y(val), z(val) {}
+    D3(T val) : x(val), y(val), z(val) {}
 
     D3 operator+(const D3& other) const {
         return D3{ x+other.x, y+other.y, z+other.z };
