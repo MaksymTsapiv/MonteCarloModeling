@@ -11,6 +11,7 @@
 #include <map>
 #include <stack>
 #include <algorithm>
+#include <random>
 
 #include "grid.cuh"
 #include "particle.cuh"

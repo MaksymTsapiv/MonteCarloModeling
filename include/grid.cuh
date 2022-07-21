@@ -5,7 +5,6 @@
 #include <string>
 #include <stdexcept>
 #include <iostream>
-#include <random>
 
 #include "particle.cuh"
 #include "d3.cuh"
