@@ -16,6 +16,7 @@
 #include "grid.cuh"
 #include "particle.cuh"
 #include "time_measurement.cuh"
+#include "quat.cuh"
 
 //std::random_device rd;
 //std::mt19937 gen(rd());
