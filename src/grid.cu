@@ -667,6 +667,13 @@ size_t Grid::move(double dispmax) {
         double y = currPart.y + vec_y * dispmax;
         double z = currPart.z + vec_z * dispmax;
 
+        if (x < 0) x = x + L.x;
+        if (y < 0) y = y + L.y;
+        if (z < 0) z = z + L.z;
+        if (x >= L.x) x = x - L.x;
+        if (y >= L.y) y = y - L.y;
+        if (z >= L.z) z = z - L.z;
+
         Particle particle = Particle(x, y, z, pSigma);
         Particle::nextId--;     // Reset Particle::nextId, because <particle> is temporary particle
         particle.id = currPart.id;
@@ -1071,13 +1078,17 @@ void Grid::cluster_info(double connect_dist, int verbose) {
 
     std::pair<size_t, size_t> biggest = biggest_cluster(clusters);
     double biggest_volume = sphere_volume(1.0) * biggest.second;
-    double relative_volume = biggest_volume / (L.x * L.y * L.z);
+    double relative_box_volume = biggest_volume / (L.x * L.y * L.z) * 100;
+    double relative_part_volume = biggest_volume / (n * sphere_volume(1.0)) * 100;
 
     auto inf_clusters = inf_cluster_search(particles, connect_dist, L.x, L.y, L.z);
 
     std::cout << "Number of clusters: \t\t" << clusters.size() << std::endl;
+    std::cout << "Average cluster size: \t\t" << n/clusters.size() << std::endl;
     std::cout << "Biggest cluster: \t\tid = " << biggest.first << "  size = " << biggest.second
-        << "  volume = " << biggest_volume << " (" << relative_volume << "% of box volume)" << std::endl;
+        << "/" << n << "  volume = " << biggest_volume << " ("
+        << relative_box_volume << "% of box volume / "
+        << relative_part_volume << "% of total particles volume)" << std::endl;
     std::cout << "Number of infinite clusters: \t" << inf_clusters.size() << std::endl;
 
     if (verbose == true) {
@@ -1215,8 +1226,11 @@ export_to_pdb ( const std::string& fn,      // output filename with extension
                 std::string charge          // 79-80
               ){
     // Workaround
-    if (stoi(sn) >= 100000)
+    if (sn.size() >= 6)
         sn = "99999";
+
+    if (res_seq_num.size() >= 5)
+        res_seq_num = "9999";
 
     type = check_fill(type, TYPE_MLEN);
     sn = check_fill(sn, SN_MLEN, right);
