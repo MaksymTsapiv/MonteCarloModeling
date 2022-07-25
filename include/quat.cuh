@@ -33,3 +33,12 @@ Quaternion singleRotQuaternion(double phi, const std::vector<double> &n_hat);
  *  Changes coordinates <coord> under rotation matrix <mat>
  */
 void updCoordRot(D3<double> &coord, const std::vector<double> &mat);
+
+/*
+ * Generate a random unit vector
+ */
+D3<double> randVector();
+
+Quaternion rotQuat(double angle, D3<double> axis, Quaternion old);
+
+Quaternion randRotQuat(double angle_max, Quaternion old);

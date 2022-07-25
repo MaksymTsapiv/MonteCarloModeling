@@ -1,5 +1,6 @@
 #include <vector>
 #include "quat.cuh"
+#include "d3.cuh"
 
 Quaternion randomQuaternion() {
     double s1, s2;
@@ -57,11 +58,40 @@ Quaternion singleRotQuaternion(double phi, const std::vector<double> &n_hat) {
 }
 
 void updCoordRot(D3<double> &coord, const std::vector<double> &mat) {
-    auto newX = coord.x*matrix[0] + coord.x*matrix[1] + coord.x*matrix[2];
-    auto newY = coord.y*matrix[3] + coord.y*matrix[4] + coord.y*matrix[5];
-    auto newZ = coord.z*matrix[6] + coord.z*matrix[7] + coord.z*matrix[8];
+    auto newX = coord.x*mat[0] + coord.x*mat[1] + coord.x*mat[2];
+    auto newY = coord.y*mat[3] + coord.y*mat[4] + coord.y*mat[5];
+    auto newZ = coord.z*mat[6] + coord.z*mat[7] + coord.z*mat[8];
 
     coord.x = newX;
     coord.y = newY;
     coord.z = newZ;
+}
+
+D3<double> randVector() {
+    double x = random_double(-1, 1);
+    double y = random_double(-1, 1);
+    double z = random_double(-1, 1);
+
+    double vecLen = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
+
+    D3<double> vec{x/vecLen, y/vecLen, z/vecLen};
+
+    return vec;
+}
+
+Quaternion rotQuat(double angle, D3<double> axis, Quaternion old) {
+    D3<double> rotVec { std::sin(0.5*angle) * axis[0],
+                        std::sin(0.5*angle) * axis[1],
+                        std::sin(0.5*angle) * axis[2]};
+
+    Quaternion rotQuat {std::cos(0.5*angle, rot[0], rot[1], rot[2])};
+
+    return quatmul(rotQuat, old);
+}
+
+Quaternion randRotQuat(double angle_max, Quaternion old) {
+    D3<double> axis = randVector();
+    double angle = ( 2.0*np.random.rand() - 1.0 ) * angle_max;
+    Quaternion e = rotQuat(angle, axis, old);
+    return e;
 }
