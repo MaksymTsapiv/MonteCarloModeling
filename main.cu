@@ -51,24 +51,39 @@ int main(int argc, char* argv[]) {
 
     double a = 4;
 
-    Particle p1 {-a/2, -a/2, 0.0, 1.0};
-    Particle p2 {-a/2,  a/2, 0.0, 1.0};
-    Particle p3 { a/2, -a/2, 0.0, 1.0};
-    Particle p4 { a/2,  a/2, 0.0, 1.0};
+    Particle p1 {-a/2, -a/2, -a/2, 1.0};
+    Particle p2 {-a/2,  a/2, -a/2, 1.0};
+    Particle p3 { a/2, -a/2, -a/2, 1.0};
+    Particle p4 { a/2,  a/2, -a/2, 1.0};
+    Particle p5 {-a/2, -a/2,  a/2, 1.0};
+    Particle p6 {-a/2,  a/2,  a/2, 1.0};
+    Particle p7 { a/2, -a/2,  a/2, 1.0};
+    Particle p8 { a/2,  a/2,  a/2, 1.0};
+    Particle p9 { 0.0,  0.0,  0.0, 1.0};
 
     grid.addParticle(p1);
     grid.addParticle(p2);
     grid.addParticle(p3);
     grid.addParticle(p4);
+    grid.addParticle(p5);
+    grid.addParticle(p6);
+    grid.addParticle(p7);
+    grid.addParticle(p8);
+    grid.addParticle(p9);
 
-    Eigen::Matrix<double, 4, 3> db{
-        { -a/2, -a/2, 0.0},
-        { -a/2,  a/2, 0.0},
-        {  a/2, -a/2, 0.0},
-        {  a/2,  a/2, 0.0}
+    Eigen::Matrix<double, 9, 3> db{
+        { -a/2, -a/2, -a/2},
+        { -a/2,  a/2, -a/2},
+        {  a/2, -a/2, -a/2},
+        {  a/2,  a/2, -a/2},
+        { -a/2, -a/2,  a/2},
+        { -a/2,  a/2,  a/2},
+        {  a/2, -a/2,  a/2},
+        {  a/2,  a/2,  a/2},
+        {   0 ,   0 ,   0 }
     };
 
-    grid.export_to_pdb("rot100.pdb");
+    grid.export_to_pdb(rotDirPath + "/rot100.pdb");
 
     Quaternion currQuat {1, 0, 0, 0};
 
@@ -78,6 +93,8 @@ int main(int argc, char* argv[]) {
 
         Eigen::Matrix<double, 3, 3> rotMat = quatToRotMatrix(rotQuat);
         auto di = db * rotMat;
+
+        std::cout << di << std::endl;
 
         p1.x = di(0, 0);
         p1.y = di(0, 1);
@@ -95,10 +112,36 @@ int main(int argc, char* argv[]) {
         p4.y = di(3, 1);
         p4.z = di(3, 2);
 
+        p5.x = di(4, 0);
+        p5.y = di(4, 1);
+        p5.z = di(4, 2);
+
+        p6.x = di(5, 0);
+        p6.y = di(5, 1);
+        p6.z = di(5, 2);
+
+        p7.x = di(6, 0);
+        p7.y = di(6, 1);
+        p7.z = di(6, 2);
+
+        p8.x = di(7, 0);
+        p8.y = di(7, 1);
+        p8.z = di(7, 2);
+
+        p9.x = di(8, 0);
+        p9.y = di(8, 1);
+        p9.z = di(8, 2);
+
+
         grid.updatePartCoord(p1.id, p1.get_coord());
         grid.updatePartCoord(p2.id, p2.get_coord());
         grid.updatePartCoord(p3.id, p3.get_coord());
         grid.updatePartCoord(p4.id, p4.get_coord());
+        grid.updatePartCoord(p5.id, p5.get_coord());
+        grid.updatePartCoord(p6.id, p6.get_coord());
+        grid.updatePartCoord(p7.id, p7.get_coord());
+        grid.updatePartCoord(p8.id, p8.get_coord());
+        grid.updatePartCoord(p9.id, p9.get_coord());
 
         grid.export_to_pdb(rotDirPath + "/rot" + std::to_string(_) + ".pdb");
     }
