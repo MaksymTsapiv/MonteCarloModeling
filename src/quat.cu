@@ -17,7 +17,7 @@ Quaternion randomQuaternion() {
     do {
         z3 = random_double(-1, 1);
         z4 = random_double(-1, 1);
-        s1 = pow(z3, 2) + pow(z4, 2);
+        s2 = pow(z3, 2) + pow(z4, 2);
     }
     while (s2 >= 1);
 
@@ -28,21 +28,27 @@ Quaternion randomQuaternion() {
     return a;
 }
 
-std::vector<double> quatToRotMatrix(const Quaternion &q) {
+Eigen::Matrix<double, 3, 3> quatToRotMatrix(const Quaternion &q) {
     /* Construct vector of 9 elements
      *  (3*3 = 9 because we reprecent 3x3 matrix as linear vector for simplicity)
      */
-    std::vector<double> rotMat(3*3, 0);
-
-    rotMat[0] = pow(q.a, 2) + pow(q.b, 2) - pow(q.c, 2) - pow(q.d, 2);
-    rotMat[1] = 2 * (q.b*q.c + q.a*q.d);
-    rotMat[2] = 2 * (q.b*q.d - q.a*q.c);
-    rotMat[3] = 2 * (q.b*q.c - q.a*q.d);
-    rotMat[4] = pow(q.a, 2) - pow(q.b, 2) + pow(q.c, 2) - pow(q.d, 2);
-    rotMat[5] = 2 * (q.c*q.d + q.a*q.b);
-    rotMat[6] = 2 * (q.b*q.d + q.a*q.c);
-    rotMat[7] = 2 * (q.c*q.d - q.a*q.b);
-    rotMat[8] = pow(q.a, 2) - pow(q.b, 2) - pow(q.c, 2) + pow(q.d, 2);
+    Eigen::Matrix<double, 3, 3> rotMat{
+        {
+            pow(q.a, 2) + pow(q.b, 2) - pow(q.c, 2) - pow(q.d, 2),
+            2 * (q.b*q.c + q.a*q.d),
+            2 * (q.b*q.d - q.a*q.c),
+        },
+        {
+            2 * (q.b*q.c - q.a*q.d),
+            pow(q.a, 2) - pow(q.b, 2) + pow(q.c, 2) - pow(q.d, 2),
+            2 * (q.c*q.d + q.a*q.b),
+        },
+        {
+            2 * (q.b*q.d + q.a*q.c),
+            2 * (q.c*q.d - q.a*q.b),
+            pow(q.a, 2) - pow(q.b, 2) - pow(q.c, 2) + pow(q.d, 2),
+        },
+    };
 
     return rotMat;
 }
@@ -89,19 +95,19 @@ D3<double> randVector() {
     return vec;
 }
 
-Quaternion rotQuat(double angle, D3<double> axis, Quaternion old) {
-    D3<double> rotVec { std::sin(0.5*angle) * axis[0],
-                        std::sin(0.5*angle) * axis[1],
-                        std::sin(0.5*angle) * axis[2]};
+Quaternion rotQuat(double angle, D3<double> axis, const Quaternion &old) {
+    D3<double> rotVec { std::sin(0.5*angle) * axis.x,
+                        std::sin(0.5*angle) * axis.y,
+                        std::sin(0.5*angle) * axis.z};
 
-    Quaternion rotQuat {std::cos(0.5*angle, rot[0], rot[1], rot[2])};
+    Quaternion rotQuat {std::cos(0.5*angle), rotVec.x, rotVec.y, rotVec.z};
 
     return quatmul(rotQuat, old);
 }
 
-Quaternion randRotQuat(double angle_max, Quaternion old) {
+Quaternion randRotQuat(double angle_max, const Quaternion &old) {
     D3<double> axis = randVector();
-    double angle = ( 2.0*np.random.rand() - 1.0 ) * angle_max;
+    double angle = ( 2.0*random_double(0, 1) - 1.0 ) * angle_max;
     Quaternion e = rotQuat(angle, axis, old);
     return e;
 }

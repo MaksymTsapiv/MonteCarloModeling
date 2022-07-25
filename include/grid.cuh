@@ -169,6 +169,12 @@ public:
     void complex_insert(Particle p);
 
 
+
+    void addParticle(const Particle &part);
+
+    void updatePartCoord(size_t pid, const D3<double> &newCoord);
+
+
     // Returns number of tries
     size_t fill();
     // Returns number of successful moves

@@ -129,6 +129,18 @@ void Grid::writeEnergyToDAT(const std::string &fn, size_t step) {
     energyFile.close();
 }
 
+
+void Grid::addParticle(const Particle &part) {
+    particles.push_back(part);
+}
+
+void Grid::updatePartCoord(size_t pid, const D3<double> &newCoord) {
+    particles[pid].x = newCoord.x;
+    particles[pid].y = newCoord.y;
+    particles[pid].z = newCoord.z;
+}
+
+
 std::vector<size_t>
 Grid::check_intersect_cpu(Particle particle) {
     std::vector<size_t> res;

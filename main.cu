@@ -6,11 +6,13 @@
 #include <cmath>
 #include <iomanip>
 #include <filesystem>
+#include <Eigen/Dense>
 
 #include "parse_config.cuh"
 #include "time_measurement.cuh"
 #include "grid.cuh"
 #include "utils.cuh"
+#include "quat.cuh"
 
 int main(int argc, char* argv[]) {
     // TODO: Parse command line options
@@ -28,22 +30,85 @@ int main(int argc, char* argv[]) {
 
     Grid grid(conf.Lx, conf.Ly, conf.Lz, D3<uint>{conf.N_cells}, conf.N);
     grid.setTemp(conf.temp);
-    grid.print_grid_info();
-
-    const double dr = 0.1;
-    const double rmax = grid.L.x / 2;
-
 
     std::string dataDirname {"data"};
     std::string rdfDirPath = dataDirname + "/rdf";
     std::string cfDirPath = dataDirname + "/cf";
     std::string pdbDirPath = dataDirname + "/pdb";
+    std::string rotDirPath = dataDirname + "/rot";
 
     std::filesystem::remove_all(dataDirname);
 
     auto mkdirStatus = std::filesystem::create_directory(dataDirname);
     if (!mkdirStatus)
         throw std::runtime_error("Failed creating directory for data " + dataDirname);
+
+    auto mkdirRotStatus = std::filesystem::create_directory(rotDirPath);
+    if (!mkdirRotStatus)
+        throw std::runtime_error("Failed creating directory for data " + rotDirPath);
+
+
+
+    double a = 4;
+
+    Particle p1 {-a/2, -a/2, 0.0, 1.0};
+    Particle p2 {-a/2,  a/2, 0.0, 1.0};
+    Particle p3 { a/2, -a/2, 0.0, 1.0};
+    Particle p4 { a/2,  a/2, 0.0, 1.0};
+
+    grid.addParticle(p1);
+    grid.addParticle(p2);
+    grid.addParticle(p3);
+    grid.addParticle(p4);
+
+    Eigen::Matrix<double, 4, 3> db{
+        { -a/2, -a/2, 0.0},
+        { -a/2,  a/2, 0.0},
+        {  a/2, -a/2, 0.0},
+        {  a/2,  a/2, 0.0}
+    };
+
+    grid.export_to_pdb("rot100.pdb");
+
+    Quaternion currQuat {1, 0, 0, 0};
+
+    for (auto _ = 101 ; _ < 200; _++) {
+        Quaternion rotQuat = randRotQuat(0.19635, currQuat);
+        currQuat = rotQuat;
+
+        Eigen::Matrix<double, 3, 3> rotMat = quatToRotMatrix(rotQuat);
+        auto di = db * rotMat;
+
+        p1.x = di(0, 0);
+        p1.y = di(0, 1);
+        p1.z = di(0, 2);
+
+        p2.x = di(1, 0);
+        p2.y = di(1, 1);
+        p2.z = di(1, 2);
+
+        p3.x = di(2, 0);
+        p3.y = di(2, 1);
+        p3.z = di(2, 2);
+
+        p4.x = di(3, 0);
+        p4.y = di(3, 1);
+        p4.z = di(3, 2);
+
+        grid.updatePartCoord(p1.id, p1.get_coord());
+        grid.updatePartCoord(p2.id, p2.get_coord());
+        grid.updatePartCoord(p3.id, p3.get_coord());
+        grid.updatePartCoord(p4.id, p4.get_coord());
+
+        grid.export_to_pdb(rotDirPath + "/rot" + std::to_string(_) + ".pdb");
+    }
+    
+    return 0;
+
+    grid.print_grid_info();
+
+    const double dr = 0.1;
+    const double rmax = grid.L.x / 2;
 
     if (conf.rdf_step) {
         // TODO: Is / crossplatform?
