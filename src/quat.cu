@@ -1,4 +1,5 @@
 #include <vector>
+#include <Eigen/Dense>
 #include "quat.cuh"
 
 Quaternion randomQuaternion() {
@@ -47,7 +48,7 @@ std::vector<double> quatToRotMatrix(const Quaternion &q) {
 
 Quaternion singleRotQuaternion(double phi, const std::vector<double> &n_hat) {
     double sin = std::sin(0.5*phi);
-    Quaternion q;
+    Quaternion q{};
     q.a = std::cos(0.5*phi);
     q.b = n_hat[0] * sin;
     q.c = n_hat[1] * sin;
@@ -55,6 +56,15 @@ Quaternion singleRotQuaternion(double phi, const std::vector<double> &n_hat) {
 
     return q;
 }
+
+Quaternion quatmul(const Quaternion& q1, const Quaternion& q2) {
+    return Quaternion{q1.a * q2.a - q1.b * q2.b - q1.c * q2.c - q1.d * q2.d,
+                      q1.b * q2.a + q1.a * q2.b - q1.d * q1.c + q1.c * q2.d,
+                      q1.c * q2.a + q1.d * q2.b + q1.a * q2.c - q1.b * q2.d,
+                      q1.d * q2.a - q1.c * q2.b + q1.b * q2.c + q1.a * q2.d
+    };
+}
+
 
 void updCoordRot(D3<double> &coord, const std::vector<double> &mat) {
     auto newX = coord.x*matrix[0] + coord.x*matrix[1] + coord.x*matrix[2];
