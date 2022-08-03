@@ -46,8 +46,12 @@ std::pair<std::pair<std::vector<int>, Eigen::Matrix<double, 4, 3>>,
             file >> temp1;
             coors.push_back(temp1);
         }
-        interaction.push_back({{types[k], types[k+1]}, {coors[k],coors[k+1]}});
     }
+
+    for (auto i = 0; i < 6; i+=2) {
+        interaction.push_back({{types[i], types[i+1]}, {coors[i],coors[i+1]}});
+    }
+
 
     return {patches, interaction};
 }

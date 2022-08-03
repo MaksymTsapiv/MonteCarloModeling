@@ -16,7 +16,7 @@
 
 int main(int argc, char* argv[]) {
     // TODO: Parse command line options
-    if (argc != 2) {
+    if (argc != 3) {
         std::cout << "Wrong arguments!" << std::endl;
         exit(1);
     }
@@ -30,7 +30,6 @@ int main(int argc, char* argv[]) {
         throw std::runtime_error("Error while opening the config file " + std::string(argv[2]));
 
     parse_patches(patch_data);
-
 
     auto config = parse_conf(data);
     auto conf = Config::from_map(config);
