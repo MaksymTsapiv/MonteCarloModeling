@@ -18,10 +18,10 @@ set(CMAKE_CUDA_STANDARD 17)
 
 #  but sometimes it creates too much trouble, so default is OFF.
 set(PROJECT_SOURCES main.cu src/grid.cu src/particle.cu src/parse_config.cu
-													src/array.cu src/utils.cu src/quat.cu)
+													src/array.cu src/utils.cu src/quat.cu src/patch.cu)
 
 set(PROJECT_HEADERS include/grid.cuh include/particle.cuh include/time_measurement.cuh
-			include/parse_config.cuh include/d3.cuh include/array.cuh include/utils.cuh include/quat.cuh)
+			include/parse_config.cuh include/d3.cuh include/array.cuh include/utils.cuh include/quat.cuh include/patch.cuh)
 
 
 

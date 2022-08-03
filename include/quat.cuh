@@ -1,3 +1,6 @@
+#ifndef QUAT_FILE_H
+#define QUAT_FILE_H
+
 #include <random>
 #include <vector>
 #include <Eigen/Dense>
@@ -41,3 +44,5 @@ D3<double> randVector();
 Quaternion rotQuat(double angle, D3<double> axis, const Quaternion &old);
 
 Quaternion randRotQuat(double angle_max, const Quaternion &old);
+
+#endif //QUAT_FILE_H

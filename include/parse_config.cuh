@@ -3,14 +3,17 @@
 
 #include <map>
 #include <string>
+#include <Eigen/Dense>
+
+std::pair<std::pair<std::vector<int>, Eigen::Matrix<double, 4, 3>>, std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>>> parse_patches(std::ifstream &file);
 
 std::map<std::string, double> parse_conf(std::ifstream &file);
 
 class Config {
 public:
-    double Lx, Ly, Lz, dispmax, connect_dist;
-    size_t N, N_steps;
-    uint N_cells;
+    double Lx{}, Ly{}, Lz{}, dispmax{}, connect_dist{};
+    size_t N{}, N_steps{};
+    uint N_cells{};
 
     bool restore = false;
 
