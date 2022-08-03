@@ -6,11 +6,11 @@
 #include <cmath>
 #include <iomanip>
 #include <filesystem>
-#include <Eigen/Dense>
 
 #include "parse_config.cuh"
 #include "time_measurement.cuh"
 #include "grid.cuh"
+#include "rot_methods.cuh"
 #include "utils.cuh"
 #include "quat.cuh"
 

@@ -9,6 +9,7 @@
 #include "particle.cuh"
 #include "d3.cuh"
 #include "array.cuh"
+#include "quat.cuh"
 
 constexpr double SPHERE_PACK_COEFF = 0.7405;
 constexpr uint nAdjCells = 27;    // Number of neighbouring cells

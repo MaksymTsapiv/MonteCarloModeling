@@ -3,6 +3,7 @@
 
 #define MAX_BLOCK_THREADS 512LU
 
+#include <vector>
 #include "d3.cuh"
 #include "patch.cuh"
 #include "quat.cuh"

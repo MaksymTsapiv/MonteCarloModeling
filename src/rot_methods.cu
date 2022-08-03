@@ -1,5 +1,6 @@
 #include <vector>
 #include <Eigen/Dense>
+#include "rot_methods.cuh"
 #include "quat.cuh"
 #include "d3.cuh"
 
