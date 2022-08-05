@@ -5,7 +5,7 @@
 #include <string>
 #include <Eigen/Dense>
 
-std::pair<std::pair<std::vector<int>, Eigen::Matrix<double, 4, 3>>, std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>>> parse_patches(std::ifstream &file);
+std::pair<std::pair<std::vector<int>, Eigen::Matrix<double, Eigen::Dynamic, 3>>, std::vector<std::pair<std::pair<int, int>, std::pair<double, double>>>> parse_patches(std::ifstream &file);
 
 std::map<std::string, double> parse_conf(std::ifstream &file);
 

@@ -29,7 +29,11 @@ int main(int argc, char* argv[]) {
     if (!patch_data)
         throw std::runtime_error("Error while opening the config file " + std::string(argv[2]));
 
-    parse_patches(patch_data);
+    auto patchesConf = parse_patches(patch_data);
+
+    size_t nPatches = patchesConf.first.first.size();
+    auto patchesMatrix = patchesConf.first.second;
+    auto types = patchesConf.first.first;
 
     auto config = parse_conf(data);
     auto conf = Config::from_map(config);
@@ -52,9 +56,6 @@ int main(int argc, char* argv[]) {
     auto mkdirRotStatus = std::filesystem::create_directory(rotDirPath);
     if (!mkdirRotStatus)
         throw std::runtime_error("Failed creating directory for data " + rotDirPath);
-
-
-    return 0;
 
     grid.print_grid_info();
 
@@ -91,7 +92,7 @@ int main(int argc, char* argv[]) {
     }
     else {
         std::cout << "Filling from scratch..." << std::endl;
-        fill_res = grid.fill();
+        fill_res = grid.fill(patchesMatrix, types);
     }
     auto finish_init = get_current_time_fenced();
 

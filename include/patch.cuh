@@ -3,7 +3,6 @@
 
 
 class Patch {
-
 public:
     double x{}, y{}, z{}, sigma{};
     size_t type{};

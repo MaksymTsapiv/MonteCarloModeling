@@ -13,9 +13,11 @@ Particle::Particle(double x_, double y_, double z_, double sigma_) :
         x(x_), y(y_), z(z_), sigma(sigma_), id(nextId), clusterId(nextId) { ++nextId;}
 
 
-//Particle::Particle(double x_, double y_, double z_, double sigma_, Quaternion quaternion_, std::vector<Patch>  patches_) :
-    //x(x_), y(y_), z(z_), sigma(sigma_), id(nextId), clusterId(nextId), quaternion(quaternion_), patches(std::move(patches_))
-//{ nextId++; }
+Particle::Particle (double x_, double y_, double z_, double sigma_, Quaternion quaternion_,
+        Eigen::Matrix<double, Eigen::Dynamic, 3> db_, std::vector<int> types_) :
+    x(x_), y(y_), z(z_), sigma(sigma_), id(nextId), clusterId(nextId),
+    quaternion(quaternion_), db(db_), types(types_)
+{ nextId++; }
 
 
 __host__ __device__ D3<double> Particle::get_coord() const {

@@ -5,6 +5,8 @@
 #include <string>
 #include <stdexcept>
 #include <iostream>
+#include <optional>
+#include <Eigen/Dense>
 
 #include "particle.cuh"
 #include "d3.cuh"
@@ -177,10 +179,10 @@ public:
 
 
     // Returns number of tries
-    size_t fill();
+    size_t fill(std::optional<Eigen::Matrix<double, Eigen::Dynamic, 3>> patchMat = {}, std::optional<std::vector<int>> types = {});
     // Returns number of successful moves
     size_t move(double dispmax);
-    void export_to_pdb(const std::string& fn);
+    void export_to_pdb(const std::string& fn, bool isPatchy = false);
 
     /* Import and export to Custom Format (cf) */
 

@@ -17,6 +17,7 @@
 #include "particle.cuh"
 #include "time_measurement.cuh"
 #include "quat.cuh"
+#include "rot_methods.cuh"
 
 //std::random_device rd;
 //std::mt19937 gen(rd());
@@ -321,7 +322,7 @@ energy_kernel (
 
 
 
-size_t Grid::fill() {
+size_t Grid::fill(std::optional<Eigen::Matrix<double, Eigen::Dynamic, 3>> patchMat, std::optional<std::vector<int>> types) {
     size_t count_tries = 0;
     size_t max_tries = 10000 * n;
 
@@ -331,7 +332,14 @@ size_t Grid::fill() {
         double y = L.y * random_double(0, 1);
         double z = L.z * random_double(0, 1);
 
-        Particle particle = Particle(x, y, z, pSigma);
+        Particle particle;
+        if (false && types.value_or(std::vector<int>{}).size()) {
+            particle = Particle(x, y, z, pSigma, Quaternion{1, 0, 0, 0}, patchMat.value(), types.value());
+            Quaternion rotQuat = randRotQuat(M_PI, particle.quaternion);
+            particle.quaternion = rotQuat;
+        }
+        else
+            particle = Particle(x, y, z, pSigma);
 
         auto pCellId = cell_id(cell(particle.get_coord()));
 
@@ -364,8 +372,10 @@ size_t Grid::fill() {
         count_tries++;
     }
     if (n != de_facto_n())
-        throw std::runtime_error("Actual number of particles <de_facto_n()> in grid "
-                "is not equal to desired number of particles <n> after fill");
+        throw std::runtime_error("Actual number of particles <de_facto_n()> = " +
+                std::to_string(de_facto_n()) + " in grid is not equal to desired number " +
+                "of particles <n> = " + std::to_string(n) + " after fill. Number of tries: " +
+                std::to_string(count_tries));
 
     cudaMemcpy(partPerCellCuda, partPerCell, sizeof(uint)*n_cells, cudaMemcpyHostToDevice);
 
@@ -1273,21 +1283,41 @@ export_to_pdb ( const std::string& fn,      // output filename with extension
     pdb_file.close();
 }
 
-void Grid::export_to_pdb(const std::string& fn) {
+void Grid::export_to_pdb(const std::string& fn, bool isPatchy) {
     remove(fn.data());
     unsigned serial_num = 1;
     for (auto particle : particles) {
 
-        std::string sn_str = std::to_string(serial_num);
-
         const std::string particle_type = "ATOM";
         const std::string atom_name = "C";
-        const std::string sort_of_elem = std::to_string(particle.clusterId);
+        // const std::string sort_of_elem = std::to_string(particle.clusterId);
+        const std::string sort_of_elem = std::to_string(0); /* 0 - particle itself */
 
         ::export_to_pdb(fn, particle_type, std::to_string(serial_num), atom_name, "", "", "",
                 sort_of_elem, "", fcoord(particle.x), fcoord(particle.y), fcoord(particle.z),
                 focctemp(particle.sigma), focctemp(temp), "", "", "");
         serial_num++;
+
+        if (isPatchy) {
+            Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> rotMat
+                = quatToRotMatrix(particle.quaternion);
+            auto di = particle.db * rotMat;
+
+            for (auto i = 0; i < di.rows(); i++) {
+                const std::string atom_name_patch = "O";
+                const std::string sort_of_elem = std::to_string(particle.types[i]);
+
+                auto x = particle.x + di(i, 0);
+                auto y = particle.y + di(i, 1);
+                auto z = particle.z + di(i, 2);
+
+                ::export_to_pdb(fn, particle_type, std::to_string(serial_num), atom_name_patch, "", "", "",
+                        sort_of_elem, "", fcoord(x), fcoord(y), fcoord(z),
+                        focctemp(0.1), focctemp(temp), "", "", "");
+                serial_num++;
+
+            }
+        }
     }
 }
 
