@@ -85,3 +85,14 @@ void save_rdf_to_file(std::vector<double> rdf, double dr, double rmax, const std
 
     RDFFile.close();
 }
+
+void checkPatchDist(const Grid &grid) {
+    for (auto part : grid.get_particles()) {
+        for (auto i = 0; i < part.types.size(); i++) {
+            D3<double> patchCoord {part.x + part.db(i, 0), part.y + part.db(i, 1), part.z + part.db(i, 2)};
+            D3<double> partCoord = part.get_coord();
+            double dista = pbs_distance(patchCoord, partCoord, grid.L);
+            std::cout << part.id << "." << i << " dist = " << dista << std::endl;
+        }
+    }
+}
