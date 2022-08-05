@@ -333,7 +333,7 @@ size_t Grid::fill(std::optional<Eigen::Matrix<double, Eigen::Dynamic, 3>> patchM
         double z = L.z * random_double(0, 1);
 
         Particle particle;
-        if (false && types.value_or(std::vector<int>{}).size()) {
+        if (types.value_or(std::vector<int>{}).size()) {
             particle = Particle(x, y, z, pSigma, Quaternion{1, 0, 0, 0}, patchMat.value(), types.value());
             Quaternion rotQuat = randRotQuat(M_PI, particle.quaternion);
             particle.quaternion = rotQuat;
@@ -1289,7 +1289,7 @@ void Grid::export_to_pdb(const std::string& fn, bool isPatchy) {
     for (auto particle : particles) {
 
         const std::string particle_type = "ATOM";
-        const std::string atom_name = "C";
+        const std::string atom_name = "Be";
         // const std::string sort_of_elem = std::to_string(particle.clusterId);
         const std::string sort_of_elem = std::to_string(0); /* 0 - particle itself */
 

@@ -45,17 +45,12 @@ int main(int argc, char* argv[]) {
     std::string rdfDirPath = dataDirname + "/rdf";
     std::string cfDirPath = dataDirname + "/cf";
     std::string pdbDirPath = dataDirname + "/pdb";
-    std::string rotDirPath = dataDirname + "/rot";
 
     std::filesystem::remove_all(dataDirname);
 
     auto mkdirStatus = std::filesystem::create_directory(dataDirname);
     if (!mkdirStatus)
         throw std::runtime_error("Failed creating directory for data " + dataDirname);
-
-    auto mkdirRotStatus = std::filesystem::create_directory(rotDirPath);
-    if (!mkdirRotStatus)
-        throw std::runtime_error("Failed creating directory for data " + rotDirPath);
 
     grid.print_grid_info();
 
@@ -112,7 +107,7 @@ int main(int argc, char* argv[]) {
         if (conf.export_cf_step)
             grid.export_to_cf(cfDirPath + "/init.cf");
         if (conf.export_pdb_step)
-            grid.export_to_pdb(pdbDirPath + "/init.pdb");
+            grid.export_to_pdb(pdbDirPath + "/init.pdb", types.size());
     }
 
 
@@ -148,7 +143,7 @@ int main(int argc, char* argv[]) {
         }
         if (conf.export_pdb_step && i % conf.export_pdb_step == 0) {
             std::cout << "Exporting to pdb... " << std::endl;
-            grid.export_to_pdb(pdbDirPath + "/step_" + std::to_string(i) + ".pdb");
+            grid.export_to_pdb(pdbDirPath + "/step_" + std::to_string(i) + ".pdb", types.size());
             std::cout << "  Done" << std::endl;
         }
         if (conf.rdf_step && i % conf.rdf_step == 0) {
@@ -181,7 +176,7 @@ int main(int argc, char* argv[]) {
 
     if (conf.export_pdb_step) {
         std::cout << "Exporting final system to custom format..." << std::endl;
-        grid.export_to_pdb(pdbDirPath + "/final.pdb");
+        grid.export_to_pdb(pdbDirPath + "/final.pdb", types.size());
         std::cout << "  Done" << std::endl;
     }
 
