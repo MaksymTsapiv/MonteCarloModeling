@@ -61,13 +61,38 @@ std::vector<double> compute_rdf(const Grid &grid, double dr, double rmax,
     return rdf_this;
 }
 
-void save_rdf_to_file(std::vector<double> rdf, double dr, double rmax, std::string filename) {
+void save_rdf_to_file(std::vector<double> rdf, double dr, double rmax, const std::string &fn) {
 
-        std::ofstream file;
-        file.open(filename);
+    std::ofstream RDFFile {fn, std::ofstream::out};
 
-        for (int k = 0; k < rdf.size(); k++)
-            file << k*dr << " : " << rdf[k] << std::endl;
+    if (!RDFFile.is_open())
+        throw std::runtime_error("Error while opening RDFFile for energy " + fn);
 
-        file.close();
+    for (int k = 0; k < rdf.size(); k++) {
+        auto kdrStr = std::to_string(k*dr);
+
+        if (kdrStr.size() > DAT_FIRST_COL_LENGTH)
+            std::cerr << "Warning: k*dr in casted to string is so big that it exceeds "
+                "DAT_FIRST_ROW_LENGTH constexpr (space reserved for first column). "
+                ".dat file with RDF may be corrupted now (consider increasing "
+                "this constexpr, it is save to do so if you need)" << std::endl;
+
+        for (auto i = kdrStr.size(); i < DAT_FIRST_COL_LENGTH; i++)
+            kdrStr += " ";
+
+        RDFFile << k*dr << " " << rdf[k] << std::endl;
+    }
+
+    RDFFile.close();
+}
+
+void checkPatchDist(const Grid &grid) {
+    for (auto part : grid.get_particles()) {
+        for (auto i = 0; i < part.types.size(); i++) {
+            D3<double> patchCoord {part.x + part.db(i, 0), part.y + part.db(i, 1), part.z + part.db(i, 2)};
+            D3<double> partCoord = part.get_coord();
+            double dista = pbs_distance(patchCoord, partCoord, grid.L);
+            std::cout << part.id << "." << i << " dist = " << dista << std::endl;
+        }
+    }
 }

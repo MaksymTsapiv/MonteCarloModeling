@@ -5,14 +5,18 @@
 #include <string>
 #include <stdexcept>
 #include <iostream>
-#include <random>
+#include <optional>
+#include <Eigen/Dense>
 
 #include "particle.cuh"
 #include "d3.cuh"
 #include "array.cuh"
+#include "quat.cuh"
 
 constexpr double SPHERE_PACK_COEFF = 0.7405;
 constexpr uint nAdjCells = 27;    // Number of neighbouring cells
+
+constexpr size_t DAT_FIRST_COL_LENGTH = 40;
 
 struct AdjCells { 
     uint ac[nAdjCells];    // id of cell
@@ -29,9 +33,6 @@ private:
     /* Number of particles in each cell */
     uint *partPerCell;
 
-    /* number of particle in system */
-    size_t n = 0;
-
     /* number of cells in system */
     size_t n_cells = 0;
     uint maxPartPerCell = 0;
@@ -46,7 +47,6 @@ private:
     AdjCells *cn;
 
     /************************ On GPU ************************/
-
     AdjCells *cnCuda;
     uint *partPerCellCuda;
 
@@ -63,6 +63,17 @@ private:
     /********************************************************/
 
 public:
+
+    /* Size of grid */
+    D3<double> L {0.0};
+
+    /* number of particle in system */
+    size_t n = 0;
+
+    /* Indicator array which clusters ids are taken */
+    int *clustersTaken;
+
+
     Grid(double x, double y, double z, D3<uint> dim_cells_, size_t n_particles) :
         orderedParticlesCuda(n_particles), n(n_particles), dimCells{dim_cells_}
     {
@@ -80,10 +91,15 @@ public:
         partPerCell = new uint[n_cells];
         memset(partPerCell, 0, sizeof(uint) * n_cells);
 
-        maxPartPerCell = SPHERE_PACK_COEFF * (3.0 * cellSize.x*cellSize.y*cellSize.z)/
-                                    (4.0 * M_PI * pow(static_cast<double>(pSigma)/2.0, 3));
+        maxPartPerCell = ceil(SPHERE_PACK_COEFF * (3.0 * cellSize.x*cellSize.y*cellSize.z)/
+                                    (4.0 * M_PI * pow(static_cast<double>(pSigma)/2.0, 3)));
 
         maxPartPerCell2pow = pow(2, ceil(log2(maxPartPerCell)));
+
+        if (maxPartPerCell2pow > MAX_BLOCK_THREADS)
+            throw std::runtime_error("Max number of particles per cell (in form of degree of 2) \
+                        is greater then MAX_BLOCK_THREADS. This may cause incorrect execution of \
+                        some kernel functions. Try changing MAX_BLOCK_THREADS or make more cells");
 
         cudaMalloc(&cellStartIdxCuda, sizeof(uint) * n_cells);
         cudaMemset(cellStartIdxCuda, 0, sizeof(uint) * n_cells);
@@ -94,23 +110,29 @@ public:
         cudaMalloc(&energiesCuda, nAdjCells*sizeof(double));
         cudaMemset(energiesCuda, 0, nAdjCells*sizeof(double));
 
-        cn = (AdjCells*) malloc(n_cells*sizeof(AdjCells));
+        cn = new AdjCells[n_cells];;
         compute_adj_cells();
 
         cudaMalloc(&cnCuda, n_cells*sizeof(AdjCells));
         cudaMemcpy(cnCuda, cn, n_cells*sizeof(AdjCells), cudaMemcpyHostToDevice);
 
         cudaMalloc(&partPerCellCuda, n_cells*sizeof(uint));
+
+        clustersTaken = new int[n];
+        memset(clustersTaken, 0, n * sizeof(int));
     }
     ~Grid() {
         cudaFree(cudaL);
-        cudaFree(intersectsCuda);
         cudaFree(cellStartIdxCuda);
-        free(cn);
+        cudaFree(intersectsCuda);
+        cudaFree(energiesCuda);
+        cudaFree(cnCuda);
+        cudaFree(partPerCellCuda);
+        delete [] cn;
+        delete [] clustersTaken;
+        delete [] partPerCell;
     }
     Grid operator=(const Grid &grid) = delete;
-
-    D3<double> L {0.0};
 
     template<typename T>
     D3<T> normalize(D3<T> p) const;
@@ -131,6 +153,8 @@ public:
         beta = 1.0/newTemp;
     }
 
+    void writeEnergyToDAT(const std::string &fn, size_t step);
+
     std::vector<size_t>
     check_intersect_cpu(Particle particle);
 
@@ -148,11 +172,17 @@ public:
     void complex_insert(Particle p);
 
 
+
+    void addParticle(const Particle &part);
+
+    void updatePartCoord(size_t pid, const D3<double> &newCoord);
+
+
     // Returns number of tries
-    size_t fill();
+    size_t fill(std::optional<Eigen::Matrix<double, Eigen::Dynamic, 3>> patchMat = {}, std::optional<std::vector<int>> types = {});
     // Returns number of successful moves
     size_t move(double dispmax);
-    void export_to_pdb(const std::string& fn);
+    void export_to_pdb(const std::string& fn, bool isPatchy = false);
 
     /* Import and export to Custom Format (cf) */
 
@@ -177,6 +207,15 @@ public:
     /* density() and packing_fraction() computes value for desired n, not actual */
     double density() const;
     double packing_fraction() const;
+
+    void dfs_cluster(double connectDist);
+
+    /* Currently, there are 3 levels of verbosity:
+     *  verbose=0 prints only essential information and does not check for error
+     *  verbose=1 prints also distribution of sizes of clusters and sizes of each cluster
+     *  verbose=2 prints only essential information but also checks for errors
+     */
+    void cluster_info(double connect_dist, int verbose=0);
 
     void compute_adj_cells();
 

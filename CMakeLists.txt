@@ -8,7 +8,7 @@ project(${PROJECT_NAME} LANGUAGES CUDA)
 
 enable_language(CUDA)
 
-set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD 17)
 
 ##########################################################
 # User configurable options of the template
@@ -18,10 +18,11 @@ set(CMAKE_CUDA_STANDARD 14)
 
 #  but sometimes it creates too much trouble, so default is OFF.
 set(PROJECT_SOURCES main.cu src/grid.cu src/particle.cu src/parse_config.cu
-													src/array.cu src/utils.cu)
+													src/array.cu src/utils.cu src/rot_methods.cu src/patch.cu)
 
 set(PROJECT_HEADERS include/grid.cuh include/particle.cuh include/time_measurement.cuh
-			include/parse_config.cuh include/d3.cuh include/array.cuh include/utils.cuh)
+			include/parse_config.cuh include/d3.cuh include/array.cuh include/utils.cuh
+			include/quat.cuh include/rot_methods.cuh include/patch.cuh)
 
 
 
@@ -43,6 +44,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC include)
 #! Add external packages
 #find_package(Threads REQUIRED)
 #target_include_directories(${PROJECT_NAME} PRIVATE ${Boost_INCLUDE_DIR})
+
+find_package (Eigen3 3.3 REQUIRED NO_MODULE)
+target_link_libraries (${PROJECT_NAME} Eigen3::Eigen)
 
 set_target_properties( ${PROJECT_NAME}
 		PROPERTIES
